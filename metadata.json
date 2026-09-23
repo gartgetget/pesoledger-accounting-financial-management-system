@@ -1,0 +1,6 @@
+{
+  "name": "ChaChing - Accounting & Financial Management System",
+  "description": "Comprehensive Philippine Peso (PHP ₱) accounting and financial management platform with transaction ledgers, job ticketing, payroll, parts inventory, and real-time P&L reporting.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
