@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { AccountingProvider, useAccounting } from './context/AccountingContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { ToastProvider } from './components/layout/ToastProvider';
 import { Sidebar } from './components/layout/Sidebar';
 import { Header } from './components/layout/Header';
 import { DashboardView } from './components/dashboard/DashboardView';
@@ -191,10 +192,12 @@ const MainAppContent: React.FC = () => {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <AccountingProvider>
-        <MainAppContent />
-      </AccountingProvider>
-    </AuthProvider>
+    <ToastProvider>
+      <AuthProvider>
+        <AccountingProvider>
+          <MainAppContent />
+        </AccountingProvider>
+      </AuthProvider>
+    </ToastProvider>
   );
 }

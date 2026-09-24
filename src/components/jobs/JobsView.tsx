@@ -169,7 +169,8 @@ export const JobsView: React.FC<JobsViewProps> = ({ onOpenJobModal, onEditJob })
                 <th className="py-3 px-4">Category</th>
                 <th className="py-3 px-4">Technician Assigned</th>
                 <th className="py-3 px-4">Diagnosis / Details</th>
-                <th className="py-3 px-4 text-center">Status</th>
+                <th className="py-3 px-4 text-center">Job Status</th>
+                <th className="py-3 px-4 text-center">Payment</th>
                 <th className="py-3 px-4 text-right">Total Billed</th>
                 <th className="py-3 px-4 text-center">Actions</th>
               </tr>
@@ -177,7 +178,7 @@ export const JobsView: React.FC<JobsViewProps> = ({ onOpenJobModal, onEditJob })
             <tbody className="divide-y divide-slate-100">
               {filteredJobs.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="py-12 text-center text-slate-400 text-xs">
+                  <td colSpan={10} className="py-12 text-center text-slate-400 text-xs">
                     No service jobs found matching your filter criteria.
                   </td>
                 </tr>
@@ -201,6 +202,28 @@ export const JobsView: React.FC<JobsViewProps> = ({ onOpenJobModal, onEditJob })
                     </td>
                     <td className="py-3 px-4 text-slate-600 max-w-xs truncate" title={job.description}>
                       {job.description}
+                    </td>
+                    <td className="py-3 px-4 text-center whitespace-nowrap">
+                      {job.status === 'open' && (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-sky-100 text-sky-800">
+                          Open
+                        </span>
+                      )}
+                      {job.status === 'in_progress' && (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800">
+                          In Progress
+                        </span>
+                      )}
+                      {job.status === 'completed' && (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                          Completed
+                        </span>
+                      )}
+                      {job.status === 'cancelled' && (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-200 text-slate-700">
+                          Cancelled
+                        </span>
+                      )}
                     </td>
                     <td className="py-3 px-4 text-center whitespace-nowrap">
                       {job.paymentStatus === 'Paid' && (

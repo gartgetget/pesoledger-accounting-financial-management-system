@@ -113,6 +113,7 @@ export interface PartUsage {
 }
 
 export type PaymentStatus = 'Paid' | 'Partially Paid' | 'Unpaid';
+export type JobStatus = 'open' | 'in_progress' | 'completed' | 'cancelled';
 
 export interface ServiceJob {
   id: string;
@@ -137,6 +138,7 @@ export interface ServiceJob {
   amountPaid: number;
   paymentMethodId: string;
   paymentStatus: PaymentStatus;
+  status: JobStatus;
   notes?: string;
   revenueId?: string;
   expenseId?: string; // for parts cost

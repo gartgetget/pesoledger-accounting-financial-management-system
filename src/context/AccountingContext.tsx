@@ -27,6 +27,7 @@ import {
 } from '../utils/date';
 import { ImportInspectionResult } from '../utils/excel';
 import { useAuth, BackendUser, BackendWorkspace } from './AuthContext';
+import { useToast } from '../components/layout/ToastProvider';
 import api from '../api/client';
 
 const defaultAccount: AccountingAccount = {
@@ -137,23 +138,42 @@ function mapBackendExpense(entry: any): Expense {
 }
 
 function mapBackendJob(order: any): ServiceJob {
+  const partsUsed = Array.isArray(order.partsUsed)
+    ? order.partsUsed.map((p: any) => ({
+        partId: p.partId || p._id || '',
+        partName: p.partName || '',
+        partNumber: p.partNumber || '',
+        quantity: Number(p.qty ?? p.quantity ?? 1),
+        costPrice: Number(p.costPrice ?? p.unitPrice ?? 0),
+        sellingPrice: Number(p.unitPrice ?? p.totalSelling ?? 0),
+        totalCost: Number(p.totalCost ?? 0),
+        totalSelling: Number(p.totalSelling ?? (Number(p.unitPrice ?? 0) * Number(p.qty ?? 1))),
+      }))
+    : [];
+  const labor = Number(order.laborCost ?? order.laborAmount ?? 0);
+  const total = Number(order.totalAmount ?? order.total ?? 0);
   return {
     id: order._id || order.id, jobNumber: order.jobNumber || `JOB-${order._id?.slice(-6) || Date.now()}`,
     customerId: order.customerId || '', customerName: order.customerName || '',
-    date: order.date ? order.date.split('T')[0] : order.date,
-    technicianId: order.assignedTechnician || '', technicianName: '',
-    serviceCategory: order.serviceCategory || '', description: order.description || '',
-    laborAmount: order.laborCost || 0, partsUsed: [], partsAmount: 0, partsCostAmount: 0,
-    otherCharges: 0, discountType: 'percentage', discountValue: 0, discountAmount: 0,
-    subtotal: order.totalAmount || 0, total: order.totalAmount || 0,
-    amountPaid: 0, paymentMethodId: '', paymentStatus: order.status === 'Paid' ? 'Paid' : 'Unpaid',
-    notes: '', revenueId: undefined, expenseId: undefined,
+    date: order.date ? String(order.date).split('T')[0] : new Date().toISOString().split('T')[0],
+    technicianId: order.assignedTechnician || order.technicianId || '', technicianName: order.technicianName || '',
+    serviceCategory: order.serviceCategory || order.serviceCategoryId || '', description: order.description || '',
+    laborAmount: labor, partsUsed, partsAmount: Number(order.partsAmount ?? 0), partsCostAmount: Number(order.partsCostAmount ?? 0),
+    otherCharges: Number(order.otherCharges ?? 0),
+    discountType: order.discountType === 'amount' ? 'amount' : 'percentage',
+    discountValue: Number(order.discountValue ?? 0), discountAmount: Number(order.discountAmount ?? 0),
+    subtotal: Number(order.subtotal ?? total), total,
+    amountPaid: Number(order.amountPaid ?? 0), paymentMethodId: order.paymentMethodId || '',
+    paymentStatus: (order.paymentStatus as ServiceJob['paymentStatus']) || 'Unpaid',
+    status: (order.status as ServiceJob['status']) || 'open',
+    notes: order.notes || '', revenueId: undefined, expenseId: undefined,
     createdAt: order.createdAt || new Date().toISOString(),
   };
 }
 
 export const AccountingProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, workspaces, activeWorkspaceId, activeWorkspace, isAuthenticated: authIsAuthenticated, isLoading: authIsLoading, login: authLogin, register: authRegister, logout: authLogout, selectWorkspace, createWorkspace: authCreateWorkspace, fetchWorkspaces } = useAuth();
+  const toast = useToast();
 
   const [accounts, setAccounts] = useState<AccountingAccount[]>([defaultAccount]);
   const [activeAccount] = useState<AccountingAccount>(defaultAccount);
@@ -348,16 +368,18 @@ export const AccountingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     try {
       await api.put(`/api/${activeWorkspaceId}/revenue/${id}`, updates);
       addAudit('UPDATE', 'Revenue', `Updated transaction ${id}`);
+      toast.success('Collection updated');
       await refetchAllData();
-    } catch (e) { console.error(e); }
+    } catch (e) { console.error(e); toast.error('Failed to update collection'); }
   };
 
   const voidRevenueTransaction = async (id: string) => {
     try {
       await api.delete(`/api/${activeWorkspaceId}/revenue/${id}`);
       addAudit('VOID', 'Revenue', `Deleted revenue transaction ${id}`);
+      toast.success('Collection deleted');
       await refetchAllData();
-    } catch (e) { console.error(e); }
+    } catch (e) { console.error(e); toast.error('Failed to delete collection'); }
   };
 
   const addExpense = async (data: Omit<Expense, 'id' | 'createdAt'>): Promise<string> => {
@@ -374,25 +396,49 @@ export const AccountingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     try {
       await api.put(`/api/${activeWorkspaceId}/expenses/${id}`, updates);
       addAudit('UPDATE', 'Expenses', `Updated expense ${id}`);
+      toast.success('Expense updated');
       await refetchAllData();
-    } catch (e) { console.error(e); }
+    } catch (e) { console.error(e); toast.error('Failed to update expense'); }
   };
 
   const voidExpense = async (id: string) => {
     try {
       await api.delete(`/api/${activeWorkspaceId}/expenses/${id}`);
       addAudit('VOID', 'Expenses', `Deleted expense ${id}`);
+      toast.success('Expense deleted');
       await refetchAllData();
-    } catch (e) { console.error(e); }
+    } catch (e) { console.error(e); toast.error('Failed to delete expense'); }
   };
 
   const createServiceJob = async (jobData: Omit<ServiceJob, 'id' | 'createdAt'>): Promise<string> => {
     try {
       const result = await api.post<{ _id?: string }>(`/api/${activeWorkspaceId}/job-orders`, {
-        customerId: jobData.customerId, serviceCategoryId: jobData.serviceCategory,
-        jobNumber: jobData.jobNumber, assignedTechnician: jobData.technicianId,
-        description: jobData.description, laborCost: jobData.laborAmount,
-        partsUsed: jobData.partsUsed, totalAmount: jobData.total, status: 'open'
+        customerId: jobData.customerId,
+        customerName: jobData.customerName,
+        serviceCategoryId: jobData.serviceCategory,
+        serviceCategory: jobData.serviceCategory,
+        jobNumber: jobData.jobNumber,
+        assignedTechnician: jobData.technicianId,
+        technicianName: jobData.technicianName,
+        description: jobData.description,
+        laborCost: jobData.laborAmount,
+        laborAmount: jobData.laborAmount,
+        partsUsed: jobData.partsUsed,
+        partsAmount: jobData.partsAmount,
+        partsCostAmount: jobData.partsCostAmount,
+        otherCharges: jobData.otherCharges,
+        discountType: jobData.discountType,
+        discountValue: jobData.discountValue,
+        discountAmount: jobData.discountAmount,
+        subtotal: jobData.subtotal,
+        totalAmount: jobData.total,
+        total: jobData.total,
+        amountPaid: jobData.amountPaid,
+        paymentMethodId: jobData.paymentMethodId,
+        paymentStatus: jobData.paymentStatus,
+        status: jobData.status || 'open',
+        date: jobData.date,
+        notes: jobData.notes || '',
       });
       addAudit('CREATE', 'Jobs', `Created service job ${jobData.jobNumber}`);
       await refetchAllData();
@@ -402,18 +448,24 @@ export const AccountingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
   const updateServiceJob = async (id: string, updates: Partial<ServiceJob>) => {
     try {
-      await api.put(`/api/${activeWorkspaceId}/job-orders/${id}`, updates);
-      addAudit('UPDATE', 'Jobs', `Updated service job ${id}`);
+      const payload: Record<string, unknown> = { ...updates };
+      if (updates.laborAmount !== undefined) payload.laborCost = updates.laborAmount;
+      if (updates.total !== undefined) payload.totalAmount = updates.total;
+      if (updates.technicianId !== undefined) payload.assignedTechnician = updates.technicianId;
+      await api.put(`/api/${activeWorkspaceId}/job-orders/${id}`, payload);
+      addAudit('UPDATE', 'Jobs', `Updated service job ${updates.jobNumber || id}`);
+      toast.success('Job order updated');
       await refetchAllData();
-    } catch (e) { console.error(e); }
+    } catch (e) { console.error(e); toast.error('Failed to update job order'); }
   };
 
   const deleteServiceJob = async (id: string) => {
     try {
       await api.delete(`/api/${activeWorkspaceId}/job-orders/${id}`);
       addAudit('VOID', 'Jobs', `Removed service job ${id}`);
+      toast.success('Job order deleted');
       await refetchAllData();
-    } catch (e) { console.error(e); }
+    } catch (e) { console.error(e); toast.error('Failed to delete job order'); }
   };
 
   const addEmployee = async (emp: Omit<Employee, 'id'>) => {
@@ -428,16 +480,18 @@ export const AccountingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     try {
       await api.put(`/api/${activeWorkspaceId}/employees/${id}`, updates);
       addAudit('UPDATE', 'Employees', `Updated employee ${id}`);
+      toast.success('Employee updated');
       await refetchAllData();
-    } catch (e) { console.error(e); }
+    } catch (e) { console.error(e); toast.error('Failed to update employee'); }
   };
 
   const deleteEmployee = async (id: string) => {
     try {
       await api.delete(`/api/${activeWorkspaceId}/employees/${id}`);
       addAudit('VOID', 'Employees', `Deleted employee ${id}`);
+      toast.success('Employee deleted');
       await refetchAllData();
-    } catch (e) { console.error(e); }
+    } catch (e) { console.error(e); toast.error('Failed to delete employee'); }
   };
 
   const processPayroll = async (record: Omit<PayrollRecord, 'id' | 'createdAt'>) => {
@@ -460,16 +514,18 @@ export const AccountingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     try {
       await api.put(`/api/${activeWorkspaceId}/vehicles/${id}`, updates);
       addAudit('UPDATE', 'Vehicles', `Updated vehicle ${id}`);
+      toast.success('Vehicle updated');
       await refetchAllData();
-    } catch (e) { console.error(e); }
+    } catch (e) { console.error(e); toast.error('Failed to update vehicle'); }
   };
 
   const deleteVehicle = async (id: string) => {
     try {
       await api.delete(`/api/${activeWorkspaceId}/vehicles/${id}`);
       addAudit('VOID', 'Vehicles', `Deleted vehicle ${id}`);
+      toast.success('Vehicle deleted');
       await refetchAllData();
-    } catch (e) { console.error(e); }
+    } catch (e) { console.error(e); toast.error('Failed to delete vehicle'); }
   };
 
   const addVehicleExpense = async (vexp: Omit<VehicleExpense, 'id'>) => {
@@ -492,16 +548,18 @@ export const AccountingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     try {
       await api.put(`/api/${activeWorkspaceId}/inventory/${id}`, updates);
       addAudit('UPDATE', 'Inventory', `Updated part ${id}`);
+      toast.success('Inventory item updated');
       await refetchAllData();
-    } catch (e) { console.error(e); }
+    } catch (e) { console.error(e); toast.error('Failed to update inventory item'); }
   };
 
   const deletePart = async (id: string) => {
     try {
       await api.delete(`/api/${activeWorkspaceId}/inventory/${id}`);
       addAudit('VOID', 'Inventory', `Removed part ${id}`);
+      toast.success('Inventory item deleted');
       await refetchAllData();
-    } catch (e) { console.error(e); }
+    } catch (e) { console.error(e); toast.error('Failed to delete inventory item'); }
   };
 
   const restockPart = async (partId: string, quantityToAdd: number, unitCostPrice?: number) => {
@@ -525,16 +583,18 @@ export const AccountingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     try {
       await api.put(`/api/${activeWorkspaceId}/customers/${id}`, updates);
       addAudit('UPDATE', 'Customers', `Updated customer ${id}`);
+      toast.success('Customer updated');
       await refetchAllData();
-    } catch (e) { console.error(e); }
+    } catch (e) { console.error(e); toast.error('Failed to update customer'); }
   };
 
   const deleteCustomer = async (id: string) => {
     try {
       await api.delete(`/api/${activeWorkspaceId}/customers/${id}`);
       addAudit('VOID', 'Customers', `Deleted customer ${id}`);
+      toast.success('Customer deleted');
       await refetchAllData();
-    } catch (e) { console.error(e); }
+    } catch (e) { console.error(e); toast.error('Failed to delete customer'); }
   };
 
   const addServiceCategory = async (name: string, description?: string) => {
@@ -548,15 +608,17 @@ export const AccountingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const deleteServiceCategory = async (id: string) => {
     try {
       await api.delete(`/api/${activeWorkspaceId}/categories/${id}`);
+      toast.success('Service category deleted');
       await refetchAllData();
-    } catch (e) { console.error(e); }
+    } catch (e) { console.error(e); toast.error('Failed to delete service category'); }
   };
 
   const updateServiceCategory = async (id: string, name: string) => {
     try {
       await api.put(`/api/${activeWorkspaceId}/categories/${id}`, { name });
+      toast.success('Service category updated');
       await refetchAllData();
-    } catch (e) { console.error(e); }
+    } catch (e) { console.error(e); toast.error('Failed to update service category'); }
   };
 
   const addRevenueCategory = async (name: string, description?: string) => {
@@ -570,15 +632,17 @@ export const AccountingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const deleteRevenueCategory = async (id: string) => {
     try {
       await api.delete(`/api/${activeWorkspaceId}/categories/${id}`);
+      toast.success('Revenue category deleted');
       await refetchAllData();
-    } catch (e) { console.error(e); }
+    } catch (e) { console.error(e); toast.error('Failed to delete revenue category'); }
   };
 
   const updateRevenueCategory = async (id: string, name: string) => {
     try {
       await api.put(`/api/${activeWorkspaceId}/categories/${id}`, { name });
+      toast.success('Revenue category updated');
       await refetchAllData();
-    } catch (e) { console.error(e); }
+    } catch (e) { console.error(e); toast.error('Failed to update revenue category'); }
   };
 
   const addExpenseCategory = async (name: string, description?: string) => {
@@ -592,15 +656,17 @@ export const AccountingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const deleteExpenseCategory = async (id: string) => {
     try {
       await api.delete(`/api/${activeWorkspaceId}/categories/${id}`);
+      toast.success('Expense category deleted');
       await refetchAllData();
-    } catch (e) { console.error(e); }
+    } catch (e) { console.error(e); toast.error('Failed to delete expense category'); }
   };
 
   const updateExpenseCategory = async (id: string, name: string) => {
     try {
       await api.put(`/api/${activeWorkspaceId}/categories/${id}`, { name });
+      toast.success('Expense category updated');
       await refetchAllData();
-    } catch (e) { console.error(e); }
+    } catch (e) { console.error(e); toast.error('Failed to update expense category'); }
   };
 
   const addPaymentMethod = async (name: string, accountNumber?: string, accountHolder?: string) => {
@@ -615,8 +681,9 @@ export const AccountingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     try {
       await api.put(`/api/${activeWorkspaceId}/payment-methods/${id}`, updates);
       addAudit('SETTINGS', 'Payment', `Updated payment method ${updates.name || id}`);
+      toast.success('Payment method updated');
       await refetchAllData();
-    } catch (e) { console.error(e); }
+    } catch (e) { console.error(e); toast.error('Failed to update payment method'); }
   };
 
   const deletePaymentMethod = async (id: string) => {
@@ -624,13 +691,15 @@ export const AccountingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       const pm = paymentMethods.find((p) => p.id === id);
       await api.delete(`/api/${activeWorkspaceId}/payment-methods/${id}`);
       addAudit('VOID', 'Payment', `Deleted payment method ${pm?.name || id}`);
+      toast.success('Payment method deleted');
       await refetchAllData();
-    } catch (e) { console.error(e); }
+    } catch (e) { console.error(e); toast.error('Failed to delete payment method'); }
   };
 
   const updateCompanySettings = async (settings: CompanySettings) => {
     setCompanySettings(settings);
     addAudit('SETTINGS', 'Company', 'Updated company profile information');
+    toast.success('Company profile updated');
   };
 
   const batchImportData = async (result: ImportInspectionResult) => {
