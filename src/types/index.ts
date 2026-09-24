@@ -233,4 +233,5 @@ export type ActiveTab =
   | 'monthly'
   | 'yearly'
   | 'migration'
-  | 'settings';
+  | 'settings'
+  | 'audit';

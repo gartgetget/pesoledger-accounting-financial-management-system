@@ -71,9 +71,9 @@ export interface AccountingContextType {
   getYearlyMatrix: (year: number) => Array<{ monthIndex: number; monthName: string; revenue: number; expenses: number; netIncome: number }>;
   addRevenueTransaction: (data: Omit<RevenueTransaction, 'id' | 'createdAt'>) => Promise<string>;
   updateRevenueTransaction: (id: string, updates: Partial<RevenueTransaction>) => void;
-  voidRevenueTransaction: (id: string, reason: string) => void;
+  voidRevenueTransaction: (id: string) => void;
   addExpense: (data: Omit<Expense, 'id' | 'createdAt'>) => Promise<string>;
-  updateExpense: (id: string, updates: Partial<Expense>) => void; voidExpense: (id: string, reason: string) => void;
+  updateExpense: (id: string, updates: Partial<Expense>) => void; voidExpense: (id: string) => void;
   createServiceJob: (job: Omit<ServiceJob, 'id' | 'createdAt'>) => Promise<string>;
   updateServiceJob: (id: string, updates: Partial<ServiceJob>) => void; deleteServiceJob: (id: string) => void;
   addEmployee: (employee: Omit<Employee, 'id'>) => void; updateEmployee: (id: string, updates: Partial<Employee>) => void;
@@ -91,6 +91,7 @@ export interface AccountingContextType {
   addExpenseCategory: (name: string, description?: string) => void;
   updateExpenseCategory: (id: string, name: string) => void; deleteExpenseCategory: (id: string) => void;
   addPaymentMethod: (name: string, accountNumber?: string, accountHolder?: string) => void;
+  updatePaymentMethod: (id: string, updates: { name?: string; accountNumber?: string; accountHolder?: string }) => void;
   deletePaymentMethod: (id: string) => void; updateCompanySettings: (settings: CompanySettings) => void;
   batchImportData: (result: ImportInspectionResult) => void; resetToDefaultData: () => void;
   exportDatabaseJSON: () => void; importDatabaseJSON: (jsonString: string) => boolean;
@@ -351,10 +352,10 @@ export const AccountingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     } catch (e) { console.error(e); }
   };
 
-  const voidRevenueTransaction = async (id: string, reason: string) => {
+  const voidRevenueTransaction = async (id: string) => {
     try {
-      await api.put(`/api/${activeWorkspaceId}/revenue/${id}`, { isVoid: true, voidReason: reason });
-      addAudit('VOID', 'Revenue', `Voided revenue transaction ${id}: ${reason}`);
+      await api.delete(`/api/${activeWorkspaceId}/revenue/${id}`);
+      addAudit('VOID', 'Revenue', `Deleted revenue transaction ${id}`);
       await refetchAllData();
     } catch (e) { console.error(e); }
   };
@@ -377,10 +378,10 @@ export const AccountingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     } catch (e) { console.error(e); }
   };
 
-  const voidExpense = async (id: string, reason: string) => {
+  const voidExpense = async (id: string) => {
     try {
-      await api.put(`/api/${activeWorkspaceId}/expenses/${id}`, { isVoid: true, voidReason: reason });
-      addAudit('VOID', 'Expenses', `Voided expense ${id}: ${reason}`);
+      await api.delete(`/api/${activeWorkspaceId}/expenses/${id}`);
+      addAudit('VOID', 'Expenses', `Deleted expense ${id}`);
       await refetchAllData();
     } catch (e) { console.error(e); }
   };
@@ -610,9 +611,19 @@ export const AccountingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     } catch (e) { console.error(e); }
   };
 
+  const updatePaymentMethod = async (id: string, updates: { name?: string; accountNumber?: string; accountHolder?: string }) => {
+    try {
+      await api.put(`/api/${activeWorkspaceId}/payment-methods/${id}`, updates);
+      addAudit('SETTINGS', 'Payment', `Updated payment method ${updates.name || id}`);
+      await refetchAllData();
+    } catch (e) { console.error(e); }
+  };
+
   const deletePaymentMethod = async (id: string) => {
     try {
+      const pm = paymentMethods.find((p) => p.id === id);
       await api.delete(`/api/${activeWorkspaceId}/payment-methods/${id}`);
+      addAudit('VOID', 'Payment', `Deleted payment method ${pm?.name || id}`);
       await refetchAllData();
     } catch (e) { console.error(e); }
   };
@@ -658,7 +669,7 @@ export const AccountingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       addServiceCategory, updateServiceCategory, deleteServiceCategory,
       addRevenueCategory, updateRevenueCategory, deleteRevenueCategory,
       addExpenseCategory, updateExpenseCategory, deleteExpenseCategory,
-      addPaymentMethod, deletePaymentMethod, updateCompanySettings,
+      addPaymentMethod, updatePaymentMethod, deletePaymentMethod, updateCompanySettings,
       batchImportData, resetToDefaultData, exportDatabaseJSON, importDatabaseJSON,
       isApiLoading: isLoadingData,
       workspaces, activeWorkspace,

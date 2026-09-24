@@ -20,6 +20,7 @@ import { YearlyAccountingView } from './components/yearly/YearlyAccountingView';
 import { ReportsView } from './components/reports/ReportsView';
 import { MigrationView } from './components/migration/MigrationView';
 import { SettingsView } from './components/settings/SettingsView';
+import { AuditView } from './components/audit/AuditView';
 import { LoginView } from './components/auth/LoginView';
 import { RevenueTransaction, Expense, ServiceJob } from './types';
 
@@ -151,6 +152,8 @@ const MainAppContent: React.FC = () => {
             {activeTab === 'migration' && <MigrationView />}
 
             {activeTab === 'settings' && <SettingsView />}
+
+            {activeTab === 'audit' && <AuditView />}
           </div>
         </main>
       </div>

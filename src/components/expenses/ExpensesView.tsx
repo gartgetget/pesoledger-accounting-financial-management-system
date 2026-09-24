@@ -13,7 +13,6 @@ import { Expense } from '../../types';
 import { formatPHP } from '../../utils/currency';
 import { formatDateDisplay, isDateInRange } from '../../utils/date';
 import { exportToExcel, exportToCSV } from '../../utils/excel';
-import { ConfirmModal } from '../layout/ConfirmModal';
 
 interface ExpensesViewProps {
   onOpenExpenseModal: () => void;
@@ -38,8 +37,6 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
   const [paymentFilter, setPaymentFilter] = useState('ALL');
   const [sortBy, setSortBy] = useState<'date-desc' | 'date-asc' | 'amount-desc' | 'amount-asc'>('date-desc');
   const [includeVoid, setIncludeVoid] = useState(false);
-
-  const [voidModalTarget, setVoidModalTarget] = useState<Expense | null>(null);
 
   const filteredList = useMemo(() => {
     return expenses.filter((e) => {
@@ -300,10 +297,10 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
                         </button>
                         {userRole === 'admin' && (
                           <button
-                            onClick={() => setVoidModalTarget(e)}
+                            onClick={() => voidExpense(e.id)}
                             disabled={e.isVoid}
                             className="p-1 text-slate-400 hover:text-rose-600 disabled:opacity-30 cursor-pointer"
-                            title="Void expense record"
+                            title="Delete expense"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
@@ -317,24 +314,6 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
           </table>
         </div>
       </div>
-
-      <ConfirmModal
-        isOpen={!!voidModalTarget}
-        title="Void Expense Record"
-        message={`Are you sure you want to void this expense of ${formatPHP(
-          voidModalTarget?.amount
-        )} [${voidModalTarget?.category}]? It will be removed from financial totals and retained in audit logs.`}
-        requireReason={true}
-        confirmLabel="Void Expense"
-        isDestructive={true}
-        onConfirm={(reason) => {
-          if (voidModalTarget) {
-            voidExpense(voidModalTarget.id, reason);
-            setVoidModalTarget(null);
-          }
-        }}
-        onCancel={() => setVoidModalTarget(null)}
-      />
     </div>
   );
 };

@@ -17,7 +17,6 @@ import { RevenueTransaction } from '../../types';
 import { formatPHP } from '../../utils/currency';
 import { formatDateDisplay, isDateInRange } from '../../utils/date';
 import { exportToExcel, exportToCSV } from '../../utils/excel';
-import { ConfirmModal } from '../layout/ConfirmModal';
 
 interface RevenueViewProps {
   onOpenRevenueModal: () => void;
@@ -45,9 +44,6 @@ export const RevenueView: React.FC<RevenueViewProps> = ({
   const [employeeFilter, setEmployeeFilter] = useState('ALL');
   const [sortBy, setSortBy] = useState<'date-desc' | 'date-asc' | 'amount-desc' | 'amount-asc'>('date-desc');
   const [includeVoid, setIncludeVoid] = useState(false);
-
-  // Void confirmation modal
-  const [voidModalTarget, setVoidModalTarget] = useState<RevenueTransaction | null>(null);
 
   // Filtered and sorted transactions
   const filteredList = useMemo(() => {
@@ -333,10 +329,10 @@ export const RevenueView: React.FC<RevenueViewProps> = ({
                         </button>
                         {userRole === 'admin' && (
                           <button
-                            onClick={() => setVoidModalTarget(tx)}
+                            onClick={() => voidRevenueTransaction(tx.id)}
                             disabled={tx.isVoid}
                             className="p-1 text-slate-400 hover:text-rose-600 disabled:opacity-30 cursor-pointer"
-                            title="Void transaction with audit note"
+                            title="Delete transaction"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
@@ -350,25 +346,6 @@ export const RevenueView: React.FC<RevenueViewProps> = ({
           </table>
         </div>
       </div>
-
-      {/* VOID CONFIRMATION MODAL */}
-      <ConfirmModal
-        isOpen={!!voidModalTarget}
-        title="Void Revenue Transaction"
-        message={`Are you sure you want to void invoice ${voidModalTarget?.invoiceNumber} (${formatPHP(
-          voidModalTarget?.amount
-        )})? In accordance with accounting controls, this record will be marked as void and subtracted from financial reports, maintaining an audit trail.`}
-        requireReason={true}
-        confirmLabel="Void Transaction"
-        isDestructive={true}
-        onConfirm={(reason) => {
-          if (voidModalTarget) {
-            voidRevenueTransaction(voidModalTarget.id, reason);
-            setVoidModalTarget(null);
-          }
-        }}
-        onCancel={() => setVoidModalTarget(null)}
-      />
     </div>
   );
 };

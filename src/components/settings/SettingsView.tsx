@@ -5,8 +5,6 @@ import {
   ShieldAlert,
   Building,
   Layers,
-  CreditCard,
-  History,
   Plus,
   Trash2,
   Edit2,
@@ -14,8 +12,7 @@ import {
   UserPlus,
 } from 'lucide-react';
 import { useAccounting } from '../../context/AccountingContext';
-import { formatPHP } from '../../utils/currency';
-import { formatDateDisplay } from '../../utils/date';
+import { PaymentMethodsCard } from './PaymentMethodsCard';
 
 export const SettingsView: React.FC = () => {
   const {
@@ -28,8 +25,6 @@ export const SettingsView: React.FC = () => {
     serviceCategories,
     revenueCategories,
     expenseCategories,
-    paymentMethods,
-    auditLogs,
     userRole,
     setUserRole,
     addServiceCategory,
@@ -41,8 +36,6 @@ export const SettingsView: React.FC = () => {
     addExpenseCategory,
     updateExpenseCategory,
     deleteExpenseCategory,
-    addPaymentMethod,
-    deletePaymentMethod,
   } = useAccounting();
 
   // Settings form states
@@ -63,9 +56,6 @@ export const SettingsView: React.FC = () => {
     name: string;
   } | null>(null);
 
-  // New payment method
-  const [newPmName, setNewPmName] = useState('');
-  const [newPmAcc, setNewPmAcc] = useState('');
   const [newAccountName, setNewAccountName] = useState('');
 
   const handleSaveCompany = (e: React.FormEvent) => {
@@ -101,14 +91,6 @@ export const SettingsView: React.FC = () => {
     if (!newExpCat.trim()) return;
     addExpenseCategory(newExpCat.trim().toUpperCase());
     setNewExpCat('');
-  };
-
-  const handleAddPm = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newPmName.trim()) return;
-    addPaymentMethod(newPmName.trim(), newPmAcc.trim());
-    setNewPmName('');
-    setNewPmAcc('');
   };
 
   const handleCreateAccount = (e: React.FormEvent) => {
@@ -156,9 +138,9 @@ export const SettingsView: React.FC = () => {
             <Settings className="w-4 h-4" />
           </div>
           <div>
-            <h1 className="text-base font-bold text-slate-900">System Configuration & Audit Trail</h1>
+            <h1 className="text-base font-bold text-slate-900">System Configuration</h1>
             <p className="text-xs text-slate-500">
-              Manage chart of accounts, business parameters, roles, and immutable transaction logs
+              Manage chart of accounts, business parameters, roles, and payment categories
             </p>
           </div>
         </div>
@@ -460,114 +442,7 @@ export const SettingsView: React.FC = () => {
       </div>
 
       {/* SECTION 3: PAYMENT METHODS */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-xs p-5">
-        <h2 className="text-xs font-bold text-slate-900 uppercase tracking-wider mb-1 flex items-center gap-1.5">
-          <CreditCard className="w-4 h-4 text-slate-700" />
-          Active Payment Channels & Financial Accounts
-        </h2>
-        <p className="text-[11px] text-slate-500 mb-3">Cash, Banks (BDO, BPI), E-Wallets (GCash, Maya)</p>
-
-        {userRole === 'admin' && (
-          <form onSubmit={handleAddPm} className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-4">
-            <input
-              type="text"
-              value={newPmName}
-              onChange={(e) => setNewPmName(e.target.value)}
-              placeholder="Account Name (e.g. Metrobank)"
-              className="text-xs px-3 py-1.5 border border-slate-300 rounded-lg"
-              required
-            />
-            <input
-              type="text"
-              value={newPmAcc}
-              onChange={(e) => setNewPmAcc(e.target.value)}
-              placeholder="Account # (e.g. 0041-XXXX)"
-              className="text-xs px-3 py-1.5 border border-slate-300 rounded-lg font-mono"
-            />
-            <button
-              type="submit"
-              className="px-4 py-1.5 bg-slate-900 text-white rounded-lg text-xs font-bold cursor-pointer"
-            >
-              + Add Channel
-            </button>
-          </form>
-        )}
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
-          {paymentMethods.map((pm) => (
-            <div key={pm.id} className="p-3 rounded-lg border border-slate-200 bg-slate-50 flex items-center justify-between">
-              <div>
-                <span className="text-xs font-bold text-slate-800 block">{pm.name}</span>
-                <span className="text-[10px] text-slate-500 font-mono">{pm.accountNumber || 'Primary Drawer'}</span>
-              </div>
-              {userRole === 'admin' && paymentMethods.length > 1 && (
-                <button
-                  onClick={() => deletePaymentMethod(pm.id)}
-                  className="text-slate-400 hover:text-rose-600 cursor-pointer"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              )}
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* SECTION 4: AUDIT TRAIL LOGS (Section 22) */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
-        <div className="p-4 border-b border-slate-100 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <History className="w-4 h-4 text-slate-700" />
-            <h2 className="text-xs font-bold text-slate-900">System Audit Trail & Security Logs</h2>
-          </div>
-          <span className="text-[11px] text-slate-500">Immutable chronological activity tracking</span>
-        </div>
-
-        <div className="overflow-x-auto max-h-72 overflow-y-auto">
-          <table className="w-full text-left text-xs">
-            <thead className="bg-slate-50 text-slate-500 uppercase tracking-wider font-semibold border-b border-slate-200">
-              <tr>
-                <th className="py-2.5 px-4">Timestamp</th>
-                <th className="py-2.5 px-4">Operator</th>
-                <th className="py-2.5 px-4">Action</th>
-                <th className="py-2.5 px-4">Module</th>
-                <th className="py-2.5 px-4">Activity Description</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 font-mono text-[11px]">
-              {auditLogs.slice(0, 50).map((log) => (
-                <tr key={log.id} className="hover:bg-slate-50/70">
-                  <td className="py-2 px-4 whitespace-nowrap text-slate-500 font-sans">
-                    {new Date(log.timestamp).toLocaleString()}
-                  </td>
-                  <td className="py-2 px-4 whitespace-nowrap font-sans font-semibold text-slate-800">
-                    {log.userName}
-                  </td>
-                  <td className="py-2 px-4 whitespace-nowrap">
-                    <span
-                      className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                        log.action === 'CREATE'
-                          ? 'bg-emerald-100 text-emerald-800'
-                          : log.action === 'VOID'
-                          ? 'bg-rose-100 text-rose-800'
-                          : log.action === 'IMPORT'
-                          ? 'bg-indigo-100 text-indigo-800'
-                          : 'bg-slate-100 text-slate-800'
-                      }`}
-                    >
-                      {log.action}
-                    </span>
-                  </td>
-                  <td className="py-2 px-4 font-sans text-slate-700">{log.module}</td>
-                  <td className="py-2 px-4 font-sans text-slate-600 truncate max-w-md" title={log.details}>
-                    {log.details}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <PaymentMethodsCard />
     </div>
   );
 };
