@@ -11,6 +11,8 @@ const jobOrderRoutes = require("./routes/jobOrderRoutes");
 const revenueRoutes = require("./routes/revenueRoutes");
 const expenseRoutes = require("./routes/expenseRoutes");
 const reportRoutes = require("./routes/reportRoutes");
+const payrollRoutes = require("./routes/payrollRoutes");
+const vehiclesRoutes = require("./routes/vehiclesRoutes");
 
 dotenv.config();
 
@@ -38,6 +40,8 @@ app.use("/api", jobOrderRoutes);
 app.use("/api", revenueRoutes);
 app.use("/api", expenseRoutes);
 app.use("/api", reportRoutes);
+app.use("/api", payrollRoutes);
+app.use("/api", vehiclesRoutes);
 
 connectDB();
 

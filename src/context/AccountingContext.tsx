@@ -196,16 +196,31 @@ export const AccountingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       setIsLoadingData(true);
       try {
         const wsId = activeWorkspaceId;
-        const [revData, expData, custData, jobData] = await Promise.all([
+        const [revData, expData, custData, jobData, catData, invData, payData, vehData, empData, pmData] = await Promise.all([
           api.get<any[]>(`/api/${wsId}/revenue`).catch(() => []),
           api.get<any[]>(`/api/${wsId}/expenses`).catch(() => []),
           api.get<any[]>(`/api/${wsId}/customers`).catch(() => []),
           api.get<any[]>(`/api/${wsId}/job-orders`).catch(() => []),
+          api.get<any[]>(`/api/${wsId}/categories`).catch(() => []),
+          api.get<any[]>(`/api/${wsId}/inventory`).catch(() => []),
+          api.get<any[]>(`/api/${wsId}/payroll`).catch(() => []),
+          api.get<any[]>(`/api/${wsId}/vehicles`).catch(() => []),
+          api.get<any[]>(`/api/${wsId}/employees`).catch(() => []),
+          api.get<any[]>(`/api/${wsId}/payment-methods`).catch(() => []),
         ]);
         setRevenueTransactions(revData.map(mapBackendRevenue));
         setExpenses(expData.map(mapBackendExpense));
         setCustomers(custData.map((c: any) => ({ id: c._id, name: c.name, contact: c.phone || '', address: c.address || '', email: c.email || '', notes: '', createdAt: c.createdAt || new Date().toISOString() })));
         setServiceJobs(jobData.map(mapBackendJob));
+        setServiceCategories(catData.filter((c: any) => c.type === 'service').map((c: any) => ({ id: c._id, name: c.name, description: c.description, isDefault: false })));
+        setRevenueCategories(catData.filter((c: any) => c.type === 'revenue').map((c: any) => ({ id: c._id, name: c.name, description: c.description, isDefault: false })));
+        setExpenseCategories(catData.filter((c: any) => c.type === 'expense').map((c: any) => ({ id: c._id, name: c.name, description: c.description, isDefault: false })));
+        setParts(invData.map((p: any) => ({ id: p._id, partNumber: p.sku, name: p.partName, category: p.category || '', description: '', supplier: '', standardPrice: p.unitPrice, costPrice: p.unitPrice, sellingPrice: p.unitPrice, quantity: p.stock, minimumStock: p.reorderLevel, dateAdded: p.createdAt })));
+        setPayrollRecords(payData.map((p: any) => ({ ...p, id: p._id })));
+        setVehicles(vehData.map((v: any) => ({ ...v, id: v._id })));
+        setVehicleExpenses([]);
+        setEmployees(empData.map((e: any) => ({ ...e, id: e._id })));
+        setPaymentMethods(pmData.map((p: any) => ({ ...p, id: p._id })));
       } catch (e) {
         console.error('Failed to fetch workspace data', e);
       } finally {
@@ -214,6 +229,40 @@ export const AccountingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     };
     fetchAllData();
   }, [activeWorkspaceId, authIsAuthenticated]);
+
+  const refetchAllData = async () => {
+    if (!activeWorkspaceId || !authIsAuthenticated) return;
+    try {
+      const wsId = activeWorkspaceId;
+      const [revData, expData, custData, jobData, catData, invData, payData, vehData, empData, pmData] = await Promise.all([
+        api.get<any[]>(`/api/${wsId}/revenue`).catch(() => []),
+        api.get<any[]>(`/api/${wsId}/expenses`).catch(() => []),
+        api.get<any[]>(`/api/${wsId}/customers`).catch(() => []),
+        api.get<any[]>(`/api/${wsId}/job-orders`).catch(() => []),
+        api.get<any[]>(`/api/${wsId}/categories`).catch(() => []),
+        api.get<any[]>(`/api/${wsId}/inventory`).catch(() => []),
+        api.get<any[]>(`/api/${wsId}/payroll`).catch(() => []),
+        api.get<any[]>(`/api/${wsId}/vehicles`).catch(() => []),
+        api.get<any[]>(`/api/${wsId}/employees`).catch(() => []),
+        api.get<any[]>(`/api/${wsId}/payment-methods`).catch(() => []),
+      ]);
+      setRevenueTransactions(revData.map(mapBackendRevenue));
+      setExpenses(expData.map(mapBackendExpense));
+      setCustomers(custData.map((c: any) => ({ id: c._id, name: c.name, contact: c.phone || '', address: c.address || '', email: c.email || '', notes: '', createdAt: c.createdAt || new Date().toISOString() })));
+      setServiceJobs(jobData.map(mapBackendJob));
+      setServiceCategories(catData.filter((c: any) => c.type === 'service').map((c: any) => ({ id: c._id, name: c.name, description: c.description, isDefault: false })));
+      setRevenueCategories(catData.filter((c: any) => c.type === 'revenue').map((c: any) => ({ id: c._id, name: c.name, description: c.description, isDefault: false })));
+      setExpenseCategories(catData.filter((c: any) => c.type === 'expense').map((c: any) => ({ id: c._id, name: c.name, description: c.description, isDefault: false })));
+      setParts(invData.map((p: any) => ({ id: p._id, partNumber: p.sku, name: p.partName, category: p.category || '', description: '', supplier: '', standardPrice: p.unitPrice, costPrice: p.unitPrice, sellingPrice: p.unitPrice, quantity: p.stock, minimumStock: p.reorderLevel, dateAdded: p.createdAt })));
+      setPayrollRecords(payData.map((p: any) => ({ ...p, id: p._id })));
+      setVehicles(vehData.map((v: any) => ({ ...v, id: v._id })));
+      setVehicleExpenses([]);
+      setEmployees(empData.map((e: any) => ({ ...e, id: e._id })));
+      setPaymentMethods(pmData.map((p: any) => ({ ...p, id: p._id })));
+    } catch (e) {
+      console.error('Failed to refetch workspace data', e);
+    }
+  };
 
   const createAccount = (name: string, password = '') => {
     const trimmedName = name.trim(); if (!trimmedName) return;
@@ -283,141 +332,307 @@ export const AccountingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     return result;
   };
 
-  const addRevenueTransaction = (data: Omit<RevenueTransaction, 'id' | 'createdAt'>): string => {
-    const id = `rev-${Date.now()}`;
+  const addRevenueTransaction = async (data: Omit<RevenueTransaction, 'id' | 'createdAt'>): Promise<string> => {
     const invoiceNumber = data.invoiceNumber?.trim() ? data.invoiceNumber : `INV-${new Date().getFullYear()}-${String(revenueTransactions.length + 1).padStart(4, '0')}`;
-    const newTx: RevenueTransaction = { ...data, id, invoiceNumber, createdAt: new Date().toISOString() };
-    setRevenueTransactions((prev) => [newTx, ...prev]);
-    addAudit('CREATE', 'Revenue', `Created invoice ${invoiceNumber} for ₱${data.amount.toLocaleString()}`);
-    return id;
+    const entry = { ...data, referenceNo: invoiceNumber, amount: data.amount };
+    try {
+      const result = await api.post(`/api/${activeWorkspaceId}/revenue`, entry);
+      addAudit('CREATE', 'Revenue', `Created invoice ${invoiceNumber} for ₱${data.amount.toLocaleString()}`);
+      await refetchAllData();
+      return result._id || invoiceNumber;
+    } catch (e) { console.error(e); return invoiceNumber; }
   };
 
-  const updateRevenueTransaction = (id: string, updates: Partial<RevenueTransaction>) => {
-    setRevenueTransactions((prev) => prev.map((t) => (t.id === id ? { ...t, ...updates } : t)));
-    addAudit('UPDATE', 'Revenue', `Updated transaction ${id}`);
+  const updateRevenueTransaction = async (id: string, updates: Partial<RevenueTransaction>) => {
+    try {
+      await api.put(`/api/${activeWorkspaceId}/revenue/${id}`, updates);
+      addAudit('UPDATE', 'Revenue', `Updated transaction ${id}`);
+      await refetchAllData();
+    } catch (e) { console.error(e); }
   };
 
-  const voidRevenueTransaction = (id: string, reason: string) => {
-    setRevenueTransactions((prev) => prev.map((t) => (t.id === id ? { ...t, isVoid: true, voidReason: reason } : t)));
-    addAudit('VOID', 'Revenue', `Voided revenue transaction ${id}: ${reason}`);
+  const voidRevenueTransaction = async (id: string, reason: string) => {
+    try {
+      await api.put(`/api/${activeWorkspaceId}/revenue/${id}`, { isVoid: true, voidReason: reason });
+      addAudit('VOID', 'Revenue', `Voided revenue transaction ${id}: ${reason}`);
+      await refetchAllData();
+    } catch (e) { console.error(e); }
   };
 
-  const addExpense = (data: Omit<Expense, 'id' | 'createdAt'>): string => {
-    const id = `exp-${Date.now()}`;
-    const newExp: Expense = { ...data, id, createdAt: new Date().toISOString() };
-    setExpenses((prev) => [newExp, ...prev]);
-    addAudit('CREATE', 'Expenses', `Logged expense ₱${data.amount.toLocaleString()} [${data.category}]`);
-    return id;
+  const addExpense = async (data: Omit<Expense, 'id' | 'createdAt'>): Promise<string> => {
+    const entry = { ...data, amount: data.amount };
+    try {
+      const result = await api.post(`/api/${activeWorkspaceId}/expenses`, entry);
+      addAudit('CREATE', 'Expenses', `Logged expense ₱${data.amount.toLocaleString()} [${data.category}]`);
+      await refetchAllData();
+      return result._id || `exp-${Date.now()}`;
+    } catch (e) { console.error(e); return `exp-${Date.now()}`; }
   };
 
-  const updateExpense = (id: string, updates: Partial<Expense>) => {
-    setExpenses((prev) => prev.map((e) => (e.id === id ? { ...e, ...updates } : e)));
-    addAudit('UPDATE', 'Expenses', `Updated expense ${id}`);
+  const updateExpense = async (id: string, updates: Partial<Expense>) => {
+    try {
+      await api.put(`/api/${activeWorkspaceId}/expenses/${id}`, updates);
+      addAudit('UPDATE', 'Expenses', `Updated expense ${id}`);
+      await refetchAllData();
+    } catch (e) { console.error(e); }
   };
 
-  const voidExpense = (id: string, reason: string) => {
-    setExpenses((prev) => prev.map((e) => (e.id === id ? { ...e, isVoid: true, voidReason: reason } : e)));
-    addAudit('VOID', 'Expenses', `Voided expense ${id}: ${reason}`);
+  const voidExpense = async (id: string, reason: string) => {
+    try {
+      await api.put(`/api/${activeWorkspaceId}/expenses/${id}`, { isVoid: true, voidReason: reason });
+      addAudit('VOID', 'Expenses', `Voided expense ${id}: ${reason}`);
+      await refetchAllData();
+    } catch (e) { console.error(e); }
   };
 
-  const createServiceJob = (jobData: Omit<ServiceJob, 'id' | 'createdAt'>): string => {
-    const jobId = `job-${Date.now()}`;
-    const fullJob: ServiceJob = { ...jobData, id: jobId, createdAt: new Date().toISOString() };
-    setServiceJobs((prev) => [fullJob, ...prev]);
-    addAudit('CREATE', 'Jobs', `Created service job ${jobData.jobNumber} for ${jobData.customerName} (Total: ₱${jobData.total.toLocaleString()})`);
-    return jobId;
+  const createServiceJob = async (jobData: Omit<ServiceJob, 'id' | 'createdAt'>): Promise<string> => {
+    try {
+      const result = await api.post(`/api/${activeWorkspaceId}/job-orders`, {
+        customerId: jobData.customerId, serviceCategoryId: jobData.serviceCategory,
+        jobNumber: jobData.jobNumber, assignedTechnician: jobData.technicianId,
+        description: jobData.description, laborCost: jobData.laborAmount,
+        partsUsed: jobData.partsUsed, totalAmount: jobData.total, status: 'open'
+      });
+      addAudit('CREATE', 'Jobs', `Created service job ${jobData.jobNumber}`);
+      await refetchAllData();
+      return result._id || `job-${Date.now()}`;
+    } catch (e) { console.error(e); return `job-${Date.now()}`; }
   };
 
-  const updateServiceJob = (id: string, updates: Partial<ServiceJob>) => {
-    setServiceJobs((prev) => prev.map((j) => (j.id === id ? { ...j, ...updates } : j)));
-    addAudit('UPDATE', 'Jobs', `Updated service job ${id}`);
+  const updateServiceJob = async (id: string, updates: Partial<ServiceJob>) => {
+    try {
+      await api.put(`/api/${activeWorkspaceId}/job-orders/${id}`, updates);
+      addAudit('UPDATE', 'Jobs', `Updated service job ${id}`);
+      await refetchAllData();
+    } catch (e) { console.error(e); }
   };
 
-  const deleteServiceJob = (id: string) => {
-    setServiceJobs((prev) => prev.filter((j) => j.id !== id));
-    addAudit('VOID', 'Jobs', `Removed service job ${id}`);
+  const deleteServiceJob = async (id: string) => {
+    try {
+      await api.delete(`/api/${activeWorkspaceId}/job-orders/${id}`);
+      addAudit('VOID', 'Jobs', `Removed service job ${id}`);
+      await refetchAllData();
+    } catch (e) { console.error(e); }
   };
 
-  const addEmployee = (emp: Omit<Employee, 'id'>) => {
-    const newEmp: Employee = { ...emp, id: `emp-${Date.now()}` };
-    setEmployees((prev) => [...prev, newEmp]);
-    addAudit('CREATE', 'Employees', `Added employee ${emp.name} (${emp.position})`);
+  const addEmployee = async (emp: Omit<Employee, 'id'>) => {
+    try {
+      await api.post(`/api/${activeWorkspaceId}/employees`, { name: emp.name, position: emp.position, dailyRate: emp.dailyRate, monthlySalary: emp.monthlySalary, basicSalary: emp.basicSalary, status: emp.status, dateStarted: emp.dateStarted, phone: emp.phone });
+      addAudit('CREATE', 'Employees', `Added employee ${emp.name}`);
+      await refetchAllData();
+    } catch (e) { console.error(e); }
   };
 
-  const updateEmployee = (id: string, updates: Partial<Employee>) => {
-    setEmployees((prev) => prev.map((e) => (e.id === id ? { ...e, ...updates } : e)));
-    addAudit('UPDATE', 'Employees', `Updated employee ${id}`);
+  const updateEmployee = async (id: string, updates: Partial<Employee>) => {
+    try {
+      await api.put(`/api/${activeWorkspaceId}/employees/${id}`, updates);
+      addAudit('UPDATE', 'Employees', `Updated employee ${id}`);
+      await refetchAllData();
+    } catch (e) { console.error(e); }
   };
 
-  const deleteEmployee = (id: string) => {
-    setEmployees((prev) => prev.filter((e) => e.id !== id));
-    addAudit('VOID', 'Employees', `Deleted employee ${id}`);
+  const deleteEmployee = async (id: string) => {
+    try {
+      await api.delete(`/api/${activeWorkspaceId}/employees/${id}`);
+      addAudit('VOID', 'Employees', `Deleted employee ${id}`);
+      await refetchAllData();
+    } catch (e) { console.error(e); }
   };
 
-  const processPayroll = (record: Omit<PayrollRecord, 'id' | 'createdAt'>) => {
-    const payrollId = `pay-${Date.now()}`;
-    const expId = `exp-pay-${Date.now()}`;
-    const salaryExpense: Expense = { id: expId, date: record.date, category: 'SALARY', description: `Payroll for ${record.employeeName} (${record.period})`, amount: record.netSalary, paymentMethodId: record.paymentMethodId, employeeId: record.employeeId, employeeName: record.employeeName, referenceNumber: `PAY-${record.employeeId}-${record.date.replace(/-/g, '')}`, relatedModule: 'salary', relatedId: payrollId, createdAt: new Date().toISOString() };
-    const newRecord: PayrollRecord = { ...record, id: payrollId, expenseId: expId, createdAt: new Date().toISOString() };
-    setPayrollRecords((prev) => [newRecord, ...prev]);
-    setExpenses((prev) => [salaryExpense, ...prev]);
-    addAudit('CREATE', 'Payroll', `Processed payroll for ${record.employeeName}: Net ₱${record.netSalary.toLocaleString()}`);
+  const processPayroll = async (record: Omit<PayrollRecord, 'id' | 'createdAt'>) => {
+    try {
+      await api.post(`/api/${activeWorkspaceId}/payroll`, { employeeName: record.employeeName, period: record.period, grossPay: record.grossSalary, deductions: record.deductions, netPay: record.netSalary });
+      addAudit('CREATE', 'Payroll', `Processed payroll for ${record.employeeName}`);
+      await refetchAllData();
+    } catch (e) { console.error(e); }
   };
 
-  const addVehicle = (veh: Omit<Vehicle, 'id'>) => { const newVeh: Vehicle = { ...veh, id: `veh-${Date.now()}` }; setVehicles((prev) => [...prev, newVeh]); addAudit('CREATE', 'Vehicles', `Added vehicle ${veh.vehicleName} (${veh.plateNumber})`); };
-  const updateVehicle = (id: string, updates: Partial<Vehicle>) => { setVehicles((prev) => prev.map((v) => (v.id === id ? { ...v, ...updates } : v))); };
-  const deleteVehicle = (id: string) => { setVehicles((prev) => prev.filter((v) => v.id !== id)); };
-  const addVehicleExpense = (vexp: Omit<VehicleExpense, 'id'>) => {
-    const expId = `exp-veh-${Date.now()}`; const vexpId = `ve-${Date.now()}`;
-    const category = vexp.expenseType === 'Fuel/Gas' ? 'GAS' : 'SASAKYAN';
-    const expenseEntry: Expense = { id: expId, date: vexp.date, category, description: `${vexp.vehicleName} - ${vexp.expenseType}: ${vexp.description}`, amount: vexp.amount, paymentMethodId: vexp.paymentMethodId, referenceNumber: `VEH-${vexp.vehicleId}`, relatedModule: 'vehicle', relatedId: vexp.vehicleId, notes: vexp.notes, createdAt: new Date().toISOString() };
-    const newVehicleExp: VehicleExpense = { ...vexp, id: vexpId, expenseId: expId };
-    setVehicleExpenses((prev) => [newVehicleExp, ...prev]); setExpenses((prev) => [expenseEntry, ...prev]);
-    addAudit('CREATE', 'Vehicles', `Logged vehicle expense ₱${vexp.amount.toLocaleString()} for ${vexp.vehicleName} (${category})`);
+  const addVehicle = async (veh: Omit<Vehicle, 'id'>) => {
+    try {
+      await api.post(`/api/${activeWorkspaceId}/vehicles`, { vehicleName: veh.vehicleName, plateNumber: veh.plateNumber, model: veh.model, assignedDriver: veh.assignedDriver });
+      addAudit('CREATE', 'Vehicles', `Added vehicle ${veh.vehicleName}`);
+      await refetchAllData();
+    } catch (e) { console.error(e); }
   };
 
-  const addPart = (part: Omit<Part, 'id'>) => { const newPart: Part = { ...part, id: `part-${Date.now()}` }; setParts((prev) => [...prev, newPart]); addAudit('CREATE', 'Inventory', `Added part ${part.name} [${part.partNumber}]`); };
-  const updatePart = (id: string, updates: Partial<Part>) => { setParts((prev) => prev.map((p) => (p.id === id ? { ...p, ...updates } : p))); addAudit('UPDATE', 'Inventory', `Updated part ${id}`); };
-  const deletePart = (id: string) => { setParts((prev) => prev.filter((p) => p.id !== id)); addAudit('VOID', 'Inventory', `Removed part ${id}`); };
-  const restockPart = (partId: string, quantityToAdd: number, unitCostPrice?: number) => {
-    setParts((prev) => prev.map((p) => { if (p.id === partId) return { ...p, quantity: p.quantity + quantityToAdd, costPrice: unitCostPrice && unitCostPrice > 0 ? unitCostPrice : p.costPrice }; return p; }));
-    addAudit('RESTOCK', 'Inventory', `Restocked part ${partId} by +${quantityToAdd} units`);
+  const updateVehicle = async (id: string, updates: Partial<Vehicle>) => {
+    try {
+      await api.put(`/api/${activeWorkspaceId}/vehicles/${id}`, updates);
+      addAudit('UPDATE', 'Vehicles', `Updated vehicle ${id}`);
+      await refetchAllData();
+    } catch (e) { console.error(e); }
   };
 
-  const addCustomer = (cust: Omit<Customer, 'id' | 'createdAt'>): string => {
-    const id = `cust-${Date.now()}`; const newCust: Customer = { ...cust, id, createdAt: new Date().toISOString() };
-    setCustomers((prev) => [...prev, newCust]); addAudit('CREATE', 'Customers', `Added customer ${cust.name}`); return id;
+  const deleteVehicle = async (id: string) => {
+    try {
+      await api.delete(`/api/${activeWorkspaceId}/vehicles/${id}`);
+      addAudit('VOID', 'Vehicles', `Deleted vehicle ${id}`);
+      await refetchAllData();
+    } catch (e) { console.error(e); }
   };
 
-  const updateCustomer = (id: string, updates: Partial<Customer>) => { setCustomers((prev) => prev.map((c) => (c.id === id ? { ...c, ...updates } : c))); };
-  const deleteCustomer = (id: string) => { setCustomers((prev) => prev.filter((c) => c.id !== id)); };
+  const addVehicleExpense = async (vexp: Omit<VehicleExpense, 'id'>) => {
+    try {
+      await api.post(`/api/${activeWorkspaceId}/vehicle-expenses`, { vehicleId: vexp.vehicleId, vehicleName: vexp.vehicleName, date: vexp.date, expenseType: vexp.expenseType, amount: vexp.amount, paymentMethodId: vexp.paymentMethodId, driverResponsible: vexp.driverResponsible, odometer: vexp.odometer, description: vexp.description, notes: vexp.notes });
+      addAudit('CREATE', 'Vehicles', `Logged vehicle expense ₱${vexp.amount}`);
+      await refetchAllData();
+    } catch (e) { console.error(e); }
+  };
 
-  const addServiceCategory = (name: string, description?: string) => { setServiceCategories((prev) => [...prev, { id: `cat-service-${Date.now()}`, name: name.toUpperCase(), description }]); addAudit('SETTINGS', 'Categories', `Added service category ${name}`); };
-  const deleteServiceCategory = (id: string) => { setServiceCategories((prev) => prev.filter((c) => c.id !== id)); };
-  const updateServiceCategory = (id: string, name: string) => { setServiceCategories((prev) => prev.map((c) => (c.id === id ? { ...c, name: name.toUpperCase() } : c))); addAudit('SETTINGS', 'Categories', `Updated service category ${name}`); };
-  const addRevenueCategory = (name: string, description?: string) => { setRevenueCategories((prev) => [...prev, { id: `cat-rev-${Date.now()}`, name: name.toUpperCase(), description }]); addAudit('SETTINGS', 'Categories', `Added revenue category ${name}`); };
-  const deleteRevenueCategory = (id: string) => { setRevenueCategories((prev) => prev.filter((c) => c.id !== id)); };
-  const updateRevenueCategory = (id: string, name: string) => { setRevenueCategories((prev) => prev.map((c) => (c.id === id ? { ...c, name: name.toUpperCase() } : c))); addAudit('SETTINGS', 'Categories', `Updated revenue category ${name}`); };
-  const addExpenseCategory = (name: string, description?: string) => { setExpenseCategories((prev) => [...prev, { id: `cat-exp-${Date.now()}`, name: name.toUpperCase(), description }]); addAudit('SETTINGS', 'Categories', `Added expense category ${name}`); };
-  const deleteExpenseCategory = (id: string) => { setExpenseCategories((prev) => prev.filter((c) => c.id !== id)); };
-  const updateExpenseCategory = (id: string, name: string) => { setExpenseCategories((prev) => prev.map((c) => (c.id === id ? { ...c, name: name.toUpperCase() } : c))); addAudit('SETTINGS', 'Categories', `Updated expense category ${name}`); };
-  const addPaymentMethod = (name: string, accountNumber?: string, accountHolder?: string) => { setPaymentMethods((prev) => [...prev, { id: `pm-${Date.now()}`, name, accountNumber, accountHolder }]); addAudit('SETTINGS', 'Payment', `Added payment method ${name}`); };
-  const deletePaymentMethod = (id: string) => { setPaymentMethods((prev) => prev.filter((p) => p.id !== id)); };
-  const updateCompanySettings = (settings: CompanySettings) => { setCompanySettings(settings); addAudit('SETTINGS', 'Company', 'Updated company profile information'); };
+  const addPart = async (part: Omit<Part, 'id'>) => {
+    try {
+      await api.post(`/api/${activeWorkspaceId}/inventory`, { partName: part.name, sku: part.partNumber, category: part.category, stock: part.quantity, unitPrice: part.sellingPrice, reorderLevel: part.minimumStock });
+      addAudit('CREATE', 'Inventory', `Added part ${part.name}`);
+      await refetchAllData();
+    } catch (e) { console.error(e); }
+  };
 
-  const batchImportData = (result: ImportInspectionResult) => {
-    if (result.detectedRevenue.length > 0) setRevenueTransactions((prev) => [...result.detectedRevenue, ...prev]);
-    if (result.detectedExpenses.length > 0) setExpenses((prev) => [...result.detectedExpenses, ...prev]);
-    if (result.detectedParts.length > 0) setParts((prev) => [...prev, ...result.detectedParts]);
-    result.detectedCategories.forEach((catName) => {
-      const upper = catName.toUpperCase();
-      if (!revenueCategories.some((c) => c.name === upper)) setRevenueCategories((prev) => [...prev, { id: `cat-rev-${Date.now()}-${upper}`, name: upper }]);
-      if (!expenseCategories.some((c) => c.name === upper)) setExpenseCategories((prev) => [...prev, { id: `cat-exp-${Date.now()}-${upper}`, name: upper }]);
-    });
-    result.detectedPaymentMethods.forEach((pmName) => {
-      if (pmName && !paymentMethods.some((p) => p.name.toLowerCase() === pmName.toLowerCase())) setPaymentMethods((prev) => [...prev, { id: `pm-${Date.now()}-${pmName}`, name: pmName, accountNumber: 'Auto-imported' }]);
-    });
-    addAudit('IMPORT', 'Excel Import', `Imported ${result.totalRecords} records from ${result.fileName}: ₱${result.totalRevenueAmount.toLocaleString()} revenue, ₱${result.totalExpenseAmount.toLocaleString()} expenses.`);
+  const updatePart = async (id: string, updates: Partial<Part>) => {
+    try {
+      await api.put(`/api/${activeWorkspaceId}/inventory/${id}`, updates);
+      addAudit('UPDATE', 'Inventory', `Updated part ${id}`);
+      await refetchAllData();
+    } catch (e) { console.error(e); }
+  };
+
+  const deletePart = async (id: string) => {
+    try {
+      await api.delete(`/api/${activeWorkspaceId}/inventory/${id}`);
+      addAudit('VOID', 'Inventory', `Removed part ${id}`);
+      await refetchAllData();
+    } catch (e) { console.error(e); }
+  };
+
+  const restockPart = async (partId: string, quantityToAdd: number, unitCostPrice?: number) => {
+    try {
+      await api.post(`/api/${activeWorkspaceId}/inventory/${partId}/adjust-stock`, { quantity: quantityToAdd, reason: 'Restock' });
+      addAudit('RESTOCK', 'Inventory', `Restocked part ${partId} by +${quantityToAdd} units`);
+      await refetchAllData();
+    } catch (e) { console.error(e); }
+  };
+
+  const addCustomer = async (cust: Omit<Customer, 'id' | 'createdAt'>): Promise<string> => {
+    try {
+      const result = await api.post(`/api/${activeWorkspaceId}/customers`, { name: cust.name, phone: cust.contact, email: cust.email, address: cust.address });
+      addAudit('CREATE', 'Customers', `Added customer ${cust.name}`);
+      await refetchAllData();
+      return result._id || `cust-${Date.now()}`;
+    } catch (e) { console.error(e); return `cust-${Date.now()}`; }
+  };
+
+  const updateCustomer = async (id: string, updates: Partial<Customer>) => {
+    try {
+      await api.put(`/api/${activeWorkspaceId}/customers/${id}`, updates);
+      addAudit('UPDATE', 'Customers', `Updated customer ${id}`);
+      await refetchAllData();
+    } catch (e) { console.error(e); }
+  };
+
+  const deleteCustomer = async (id: string) => {
+    try {
+      await api.delete(`/api/${activeWorkspaceId}/customers/${id}`);
+      addAudit('VOID', 'Customers', `Deleted customer ${id}`);
+      await refetchAllData();
+    } catch (e) { console.error(e); }
+  };
+
+  const addServiceCategory = async (name: string, description?: string) => {
+    try {
+      await api.post(`/api/${activeWorkspaceId}/categories`, { workspaceId: activeWorkspaceId, type: 'service', name, description });
+      addAudit('SETTINGS', 'Categories', `Added service category ${name}`);
+      await refetchAllData();
+    } catch (e) { console.error(e); }
+  };
+
+  const deleteServiceCategory = async (id: string) => {
+    try {
+      await api.delete(`/api/${activeWorkspaceId}/categories/${id}`);
+      await refetchAllData();
+    } catch (e) { console.error(e); }
+  };
+
+  const updateServiceCategory = async (id: string, name: string) => {
+    try {
+      await api.put(`/api/${activeWorkspaceId}/categories/${id}`, { name });
+      await refetchAllData();
+    } catch (e) { console.error(e); }
+  };
+
+  const addRevenueCategory = async (name: string, description?: string) => {
+    try {
+      await api.post(`/api/${activeWorkspaceId}/categories`, { workspaceId: activeWorkspaceId, type: 'revenue', name, description });
+      addAudit('SETTINGS', 'Categories', `Added revenue category ${name}`);
+      await refetchAllData();
+    } catch (e) { console.error(e); }
+  };
+
+  const deleteRevenueCategory = async (id: string) => {
+    try {
+      await api.delete(`/api/${activeWorkspaceId}/categories/${id}`);
+      await refetchAllData();
+    } catch (e) { console.error(e); }
+  };
+
+  const updateRevenueCategory = async (id: string, name: string) => {
+    try {
+      await api.put(`/api/${activeWorkspaceId}/categories/${id}`, { name });
+      await refetchAllData();
+    } catch (e) { console.error(e); }
+  };
+
+  const addExpenseCategory = async (name: string, description?: string) => {
+    try {
+      await api.post(`/api/${activeWorkspaceId}/categories`, { workspaceId: activeWorkspaceId, type: 'expense', name, description });
+      addAudit('SETTINGS', 'Categories', `Added expense category ${name}`);
+      await refetchAllData();
+    } catch (e) { console.error(e); }
+  };
+
+  const deleteExpenseCategory = async (id: string) => {
+    try {
+      await api.delete(`/api/${activeWorkspaceId}/categories/${id}`);
+      await refetchAllData();
+    } catch (e) { console.error(e); }
+  };
+
+  const updateExpenseCategory = async (id: string, name: string) => {
+    try {
+      await api.put(`/api/${activeWorkspaceId}/categories/${id}`, { name });
+      await refetchAllData();
+    } catch (e) { console.error(e); }
+  };
+
+  const addPaymentMethod = async (name: string, accountNumber?: string, accountHolder?: string) => {
+    try {
+      await api.post(`/api/${activeWorkspaceId}/payment-methods`, { name, accountNumber, accountHolder });
+      addAudit('SETTINGS', 'Payment', `Added payment method ${name}`);
+      await refetchAllData();
+    } catch (e) { console.error(e); }
+  };
+
+  const deletePaymentMethod = async (id: string) => {
+    try {
+      await api.delete(`/api/${activeWorkspaceId}/payment-methods/${id}`);
+      await refetchAllData();
+    } catch (e) { console.error(e); }
+  };
+
+  const updateCompanySettings = async (settings: CompanySettings) => {
+    setCompanySettings(settings);
+    addAudit('SETTINGS', 'Company', 'Updated company profile information');
+  };
+
+  const batchImportData = async (result: ImportInspectionResult) => {
+    try {
+      for (const rev of result.detectedRevenue) {
+        await api.post(`/api/${activeWorkspaceId}/revenue`, { date: rev.date, amount: rev.amount, description: rev.description });
+      }
+      for (const exp of result.detectedExpenses) {
+        await api.post(`/api/${activeWorkspaceId}/expenses`, { date: exp.date, amount: exp.amount, category: exp.category, description: exp.description });
+      }
+      addAudit('IMPORT', 'Excel Import', `Imported ${result.totalRecords} records: ₱${result.totalRevenueAmount.toLocaleString()} revenue, ₱${result.totalExpenseAmount.toLocaleString()} expenses.`);
+      await refetchAllData();
+    } catch (e) { console.error(e); }
   };
 
   const resetToDefaultData = () => { setRevenueTransactions([]); setExpenses([]); setCustomers([]); setEmployees([]); setPayrollRecords([]); setVehicles([]); setVehicleExpenses([]); setParts([]); setServiceJobs([]); setServiceCategories([]); setRevenueCategories([]); setExpenseCategories(defaultExpenseCategories); setPaymentMethods([]); setCompanySettings(emptyCompanySettings); setAuditLogs([]); };

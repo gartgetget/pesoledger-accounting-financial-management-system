@@ -54,4 +54,27 @@ router.get("/:workspaceId", async (req, res) => {
   res.json(workspace);
 });
 
+router.put("/:workspaceId", async (req, res) => {
+  const { workspaceId } = req.params;
+  const { name, businessName, currency, timezone } = req.body;
+
+  if (!req.user.workspaces.includes(workspaceId)) {
+    return res.status(403).json({ message: "Access denied" });
+  }
+
+  const workspace = await Workspace.findOne({ _id: workspaceId });
+  if (!workspace) {
+    return res.status(404).json({ message: "Workspace not found" });
+  }
+
+  workspace.name = name || workspace.name;
+  workspace.settings.businessName = businessName || workspace.settings.businessName;
+  workspace.settings.currency = currency || workspace.settings.currency;
+  workspace.settings.timezone = timezone || workspace.settings.timezone;
+  workspace.updatedAt = new Date();
+  await workspace.save();
+
+  res.json(workspace);
+});
+
 module.exports = router;

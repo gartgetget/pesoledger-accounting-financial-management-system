@@ -90,4 +90,67 @@ router.get("/:workspaceId/reports/monthly", ensureWorkspaceAccess, async (req, r
   });
 });
 
+router.get("/:workspaceId/reports/yearly", ensureWorkspaceAccess, async (req, res) => {
+  const { workspaceId } = req.params;
+  const { year } = req.query;
+
+  if (!year) {
+    return res.status(400).json({ message: "Year query is required" });
+  }
+
+  const y = parseInt(year);
+  const start = new Date(y, 0, 1);
+  const end = new Date(y, 11, 31, 23, 59, 59, 999);
+
+  const [revenue, expenses] = await Promise.all([
+    RevenueEntry.aggregate([
+      { $match: { workspaceId, date: { $gte: start, $lte: end } } },
+      {
+        $group: {
+          _id: { $month: "$date" },
+          total: { $sum: "$amount" }
+        }
+      },
+      { $sort: { _id: 1 } }
+    ]),
+    ExpenseEntry.aggregate([
+      { $match: { workspaceId, date: { $gte: start, $lte: end } } },
+      {
+        $group: {
+          _id: { $month: "$date" },
+          total: { $sum: "$amount" }
+        }
+      },
+      { $sort: { _id: 1 } }
+    ])
+  ]);
+
+  const revenueByMonth = {};
+  revenue.forEach((r) => { revenueByMonth[r._id] = r.total; });
+  const expenseByMonth = {};
+  expenses.forEach((e) => { expenseByMonth[e._id] = e.total; });
+
+  const monthlyData = [];
+  for (let m = 1; m <= 12; m++) {
+    monthlyData.push({
+      monthIndex: m - 1,
+      monthName: new Date(y, m - 1).toLocaleString("en-US", { month: "short" }),
+      revenue: revenueByMonth[m] || 0,
+      expenses: expenseByMonth[m] || 0,
+      net: (revenueByMonth[m] || 0) - (expenseByMonth[m] || 0)
+    });
+  }
+
+  const totalRevenue = monthlyData.reduce((s, d) => s + d.revenue, 0);
+  const totalExpenses = monthlyData.reduce((s, d) => s + d.expenses, 0);
+
+  res.json({
+    year,
+    monthlyData,
+    totalRevenue,
+    totalExpenses,
+    net: totalRevenue - totalExpenses
+  });
+});
+
 module.exports = router;
