@@ -1,6 +1,6 @@
-import { createRouter } from "../middleware/createRouter";
-import JobOrder from "../models/JobOrder";
-import auth from "../middleware/auth";
+import { createRouter } from "../middleware/createRouter.js";
+import JobOrder from "../models/JobOrder.js";
+import auth from "../middleware/auth.js";
 
 const router = createRouter();
 

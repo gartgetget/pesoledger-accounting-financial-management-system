@@ -1,18 +1,18 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
-import connectDB from "./db";
-import authRoutes from "./routes/authRoutes";
-import workspaceRoutes from "./routes/workspaceRoutes";
-import categoryRoutes from "./routes/categoryRoutes";
-import customerRoutes from "./routes/customerRoutes";
-import inventoryRoutes from "./routes/inventoryRoutes";
-import jobOrderRoutes from "./routes/jobOrderRoutes";
-import revenueRoutes from "./routes/revenueRoutes";
-import expenseRoutes from "./routes/expenseRoutes";
-import reportRoutes from "./routes/reportRoutes";
-import payrollRoutes from "./routes/payrollRoutes";
-import vehiclesRoutes from "./routes/vehiclesRoutes";
+import connectDB from "./db.js";
+import authRoutes from "./routes/authRoutes.js";
+import workspaceRoutes from "./routes/workspaceRoutes.js";
+import categoryRoutes from "./routes/categoryRoutes.js";
+import customerRoutes from "./routes/customerRoutes.js";
+import inventoryRoutes from "./routes/inventoryRoutes.js";
+import jobOrderRoutes from "./routes/jobOrderRoutes.js";
+import revenueRoutes from "./routes/revenueRoutes.js";
+import expenseRoutes from "./routes/expenseRoutes.js";
+import reportRoutes from "./routes/reportRoutes.js";
+import payrollRoutes from "./routes/payrollRoutes.js";
+import vehiclesRoutes from "./routes/vehiclesRoutes.js";
 
 dotenv.config();
 
@@ -57,12 +57,21 @@ app.use((err: any, _req: any, res: any, _next: any) => {
         ? 409
         : err.name === "ValidationError"
           ? 400
-          : /buffering timed out|ECONNREFUSED|MONGO_URI|MongoServerError|MongoNetworkError|MongooseError/i.test(
+          : /buffering timed out|ECONNREFUSED|MONGO_URI|MongoServerError|MongoNetworkError|MongooseError|MongooseServerSelectionError|MongoServerSelectionError|Server selection timed out/i.test(
                 `${err.name || ""} ${err.message || ""}`,
               )
             ? 503
-            : 500;
-  res.status(status).json({ message: err.message || "Internal server error" });
+            : err.status && err.status >= 400 && err.status < 600
+              ? err.status
+              : 500;
+  const message =
+    /MongooseServerSelectionError|MongoServerSelectionError|Server selection timed out|ECONNREFUSED|buffering timed out/i.test(
+      `${err.name || ""} ${err.message || ""}`,
+    )
+      ? "Database unavailable — check MONGO_URI and Atlas IP allowlist"
+      : err.message || "Internal server error";
+  if (res.headersSent || res.writableEnded) return;
+  res.status(status).json({ message });
 });
 
 export default app;

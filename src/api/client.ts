@@ -64,6 +64,12 @@ async function apiRequest<T>(
   }
 
   if (!response.ok) {
+    if (response.status >= 500 && !data?.message) {
+      throw new ApiError(response.status, {
+        message:
+          "Server error (500). Check Vercel logs and environment variables.",
+      });
+    }
     throw new ApiError(response.status, data);
   }
 

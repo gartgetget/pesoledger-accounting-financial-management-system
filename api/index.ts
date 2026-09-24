@@ -1,5 +1,5 @@
 import { VercelRequest, VercelResponse } from "@vercel/node";
-import app from "../backend/index";
+import app from "../backend/index.js";
 
 if (!(globalThis as any).__unhandledRejectionHooked) {
   (globalThis as any).__unhandledRejectionHooked = true;
@@ -14,9 +14,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const finish = (send: () => void) => {
       if (done) return;
       done = true;
-      clearTimeout(timeout);
-      send();
-      resolve();
+      try {
+        clearTimeout(timeout);
+      } catch {}
+      try {
+        send();
+      } catch (sendErr: any) {
+        try {
+          if (!res.headersSent) {
+            res.status(500).json({
+              message: "Internal server error",
+              error: sendErr?.message,
+            });
+          }
+        } catch {}
+      } finally {
+        resolve();
+      }
     };
 
     const serverReq: any = {

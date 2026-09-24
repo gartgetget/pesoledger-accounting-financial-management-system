@@ -1,6 +1,6 @@
-import { createRouter } from "../middleware/createRouter";
-import InventoryItem from "../models/InventoryItem";
-import auth from "../middleware/auth";
+import { createRouter } from "../middleware/createRouter.js";
+import InventoryItem from "../models/InventoryItem.js";
+import auth from "../middleware/auth.js";
 
 const router = createRouter();
 

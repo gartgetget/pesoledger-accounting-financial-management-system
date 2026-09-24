@@ -1,6 +1,6 @@
-import { createRouter } from "../middleware/createRouter";
-import PayrollEntry from "../models/PayrollEntry";
-import auth from "../middleware/auth";
+import { createRouter } from "../middleware/createRouter.js";
+import PayrollEntry from "../models/PayrollEntry.js";
+import auth from "../middleware/auth.js";
 
 const router = createRouter();
 router.use(auth);

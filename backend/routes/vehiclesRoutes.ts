@@ -1,9 +1,9 @@
-import { createRouter } from "../middleware/createRouter";
-import Vehicle from "../models/Vehicle";
-import VehicleExpense from "../models/VehicleExpense";
-import Employee from "../models/Employee";
-import PaymentMethod from "../models/PaymentMethod";
-import auth from "../middleware/auth";
+import { createRouter } from "../middleware/createRouter.js";
+import Vehicle from "../models/Vehicle.js";
+import VehicleExpense from "../models/VehicleExpense.js";
+import Employee from "../models/Employee.js";
+import PaymentMethod from "../models/PaymentMethod.js";
+import auth from "../middleware/auth.js";
 
 const router = createRouter();
 router.use(auth);

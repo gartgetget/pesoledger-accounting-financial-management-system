@@ -1,7 +1,7 @@
-import { createRouter } from "../middleware/createRouter";
-import RevenueEntry from "../models/RevenueEntry";
-import ExpenseEntry from "../models/ExpenseEntry";
-import auth from "../middleware/auth";
+import { createRouter } from "../middleware/createRouter.js";
+import RevenueEntry from "../models/RevenueEntry.js";
+import ExpenseEntry from "../models/ExpenseEntry.js";
+import auth from "../middleware/auth.js";
 
 const router = createRouter();
 

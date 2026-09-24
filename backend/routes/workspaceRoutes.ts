@@ -1,7 +1,7 @@
-import { createRouter } from "../middleware/createRouter";
-import Workspace from "../models/Workspace";
-import User from "../models/User";
-import auth from "../middleware/auth";
+import { createRouter } from "../middleware/createRouter.js";
+import Workspace from "../models/Workspace.js";
+import User from "../models/User.js";
+import auth from "../middleware/auth.js";
 
 const router = createRouter();
 

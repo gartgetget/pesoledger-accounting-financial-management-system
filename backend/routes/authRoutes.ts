@@ -1,16 +1,24 @@
-import { createRouter } from "../middleware/createRouter";
+import { createRouter } from "../middleware/createRouter.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import User from "../models/User";
-import Workspace from "../models/Workspace";
-import auth from "../middleware/auth";
+import User from "../models/User.js";
+import Workspace from "../models/Workspace.js";
+import auth from "../middleware/auth.js";
 
 const router = createRouter();
 
-const signToken = (userId: any) =>
-  jwt.sign({ id: userId }, process.env.JWT_SECRET!, {
+const signToken = (userId: any) => {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    throw Object.assign(new Error("JWT_SECRET is not configured"), {
+      status: 500,
+      expose: true,
+    });
+  }
+  return jwt.sign({ id: userId }, secret, {
     expiresIn: process.env.JWT_EXPIRES_IN || "7d",
   } as any);
+};
 
 router.post("/register", async (req, res) => {
   const fullName = String(req.body.fullName || "").trim();
