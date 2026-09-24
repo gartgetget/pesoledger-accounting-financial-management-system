@@ -69,12 +69,12 @@ export interface AccountingContextType {
   paymentMethods: PaymentMethodItem[]; companySettings: CompanySettings; auditLogs: AuditLog[];
   financialSummary: FinancialSummary; getSummaryForRange: (range: DateFilterRange) => FinancialSummary;
   getYearlyMatrix: (year: number) => Array<{ monthIndex: number; monthName: string; revenue: number; expenses: number; netIncome: number }>;
-  addRevenueTransaction: (data: Omit<RevenueTransaction, 'id' | 'createdAt'>) => string;
+  addRevenueTransaction: (data: Omit<RevenueTransaction, 'id' | 'createdAt'>) => Promise<string>;
   updateRevenueTransaction: (id: string, updates: Partial<RevenueTransaction>) => void;
   voidRevenueTransaction: (id: string, reason: string) => void;
-  addExpense: (data: Omit<Expense, 'id' | 'createdAt'>) => string;
+  addExpense: (data: Omit<Expense, 'id' | 'createdAt'>) => Promise<string>;
   updateExpense: (id: string, updates: Partial<Expense>) => void; voidExpense: (id: string, reason: string) => void;
-  createServiceJob: (job: Omit<ServiceJob, 'id' | 'createdAt'>) => string;
+  createServiceJob: (job: Omit<ServiceJob, 'id' | 'createdAt'>) => Promise<string>;
   updateServiceJob: (id: string, updates: Partial<ServiceJob>) => void; deleteServiceJob: (id: string) => void;
   addEmployee: (employee: Omit<Employee, 'id'>) => void; updateEmployee: (id: string, updates: Partial<Employee>) => void;
   deleteEmployee: (id: string) => void; processPayroll: (record: Omit<PayrollRecord, 'id' | 'createdAt'>) => void;
@@ -82,7 +82,7 @@ export interface AccountingContextType {
   deleteVehicle: (id: string) => void; addVehicleExpense: (vexp: Omit<VehicleExpense, 'id'>) => void;
   addPart: (part: Omit<Part, 'id'>) => void; updatePart: (id: string, updates: Partial<Part>) => void;
   deletePart: (id: string) => void; restockPart: (partId: string, quantityToAdd: number, unitCostPrice?: number) => void;
-  addCustomer: (customer: Omit<Customer, 'id' | 'createdAt'>) => string;
+  addCustomer: (customer: Omit<Customer, 'id' | 'createdAt'>) => Promise<string>;
   updateCustomer: (id: string, updates: Partial<Customer>) => void; deleteCustomer: (id: string) => void;
   addServiceCategory: (name: string, description?: string) => void;
   updateServiceCategory: (id: string, name: string) => void; deleteServiceCategory: (id: string) => void;
@@ -152,7 +152,7 @@ function mapBackendJob(order: any): ServiceJob {
 }
 
 export const AccountingProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { user, activeWorkspaceId, activeWorkspace, isAuthenticated: authIsAuthenticated, isLoading: authIsLoading, login: authLogin, register: authRegister, logout: authLogout, selectWorkspace, createWorkspace: authCreateWorkspace, fetchWorkspaces } = useAuth();
+  const { user, workspaces, activeWorkspaceId, activeWorkspace, isAuthenticated: authIsAuthenticated, isLoading: authIsLoading, login: authLogin, register: authRegister, logout: authLogout, selectWorkspace, createWorkspace: authCreateWorkspace, fetchWorkspaces } = useAuth();
 
   const [accounts, setAccounts] = useState<AccountingAccount[]>([defaultAccount]);
   const [activeAccount] = useState<AccountingAccount>(defaultAccount);
@@ -336,7 +336,7 @@ export const AccountingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     const invoiceNumber = data.invoiceNumber?.trim() ? data.invoiceNumber : `INV-${new Date().getFullYear()}-${String(revenueTransactions.length + 1).padStart(4, '0')}`;
     const entry = { ...data, referenceNo: invoiceNumber, amount: data.amount };
     try {
-      const result = await api.post(`/api/${activeWorkspaceId}/revenue`, entry);
+      const result = await api.post<{ _id?: string }>(`/api/${activeWorkspaceId}/revenue`, entry);
       addAudit('CREATE', 'Revenue', `Created invoice ${invoiceNumber} for ₱${data.amount.toLocaleString()}`);
       await refetchAllData();
       return result._id || invoiceNumber;
@@ -362,7 +362,7 @@ export const AccountingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const addExpense = async (data: Omit<Expense, 'id' | 'createdAt'>): Promise<string> => {
     const entry = { ...data, amount: data.amount };
     try {
-      const result = await api.post(`/api/${activeWorkspaceId}/expenses`, entry);
+      const result = await api.post<{ _id?: string }>(`/api/${activeWorkspaceId}/expenses`, entry);
       addAudit('CREATE', 'Expenses', `Logged expense ₱${data.amount.toLocaleString()} [${data.category}]`);
       await refetchAllData();
       return result._id || `exp-${Date.now()}`;
@@ -387,7 +387,7 @@ export const AccountingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
   const createServiceJob = async (jobData: Omit<ServiceJob, 'id' | 'createdAt'>): Promise<string> => {
     try {
-      const result = await api.post(`/api/${activeWorkspaceId}/job-orders`, {
+      const result = await api.post<{ _id?: string }>(`/api/${activeWorkspaceId}/job-orders`, {
         customerId: jobData.customerId, serviceCategoryId: jobData.serviceCategory,
         jobNumber: jobData.jobNumber, assignedTechnician: jobData.technicianId,
         description: jobData.description, laborCost: jobData.laborAmount,
@@ -513,7 +513,7 @@ export const AccountingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
   const addCustomer = async (cust: Omit<Customer, 'id' | 'createdAt'>): Promise<string> => {
     try {
-      const result = await api.post(`/api/${activeWorkspaceId}/customers`, { name: cust.name, phone: cust.contact, email: cust.email, address: cust.address });
+      const result = await api.post<{ _id?: string }>(`/api/${activeWorkspaceId}/customers`, { name: cust.name, phone: cust.contact, email: cust.email, address: cust.address });
       addAudit('CREATE', 'Customers', `Added customer ${cust.name}`);
       await refetchAllData();
       return result._id || `cust-${Date.now()}`;
@@ -661,7 +661,7 @@ export const AccountingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       addPaymentMethod, deletePaymentMethod, updateCompanySettings,
       batchImportData, resetToDefaultData, exportDatabaseJSON, importDatabaseJSON,
       isApiLoading: isLoadingData,
-      workspaces: [], activeWorkspace,
+      workspaces, activeWorkspace,
       fetchWorkspaces, selectWorkspace, createWorkspace: authCreateWorkspace,
     }}>
       {children}
