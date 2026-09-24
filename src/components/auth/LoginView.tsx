@@ -3,8 +3,6 @@ import { ArrowRight, LockKeyhole, UserPlus, Building2, Loader2 } from 'lucide-re
 import { useAccounting } from '../../context/AccountingContext';
 import { useAuth } from '../../context/AuthContext';
 
-const API_BASE_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5000').replace(/\/$/, '');
-
 export const LoginView: React.FC = () => {
   const { createAccount } = useAccounting();
   const { login: authLogin, register: authRegister, workspaces, activeWorkspaceId, selectWorkspace, isAuthenticated, isLoading } = useAuth();

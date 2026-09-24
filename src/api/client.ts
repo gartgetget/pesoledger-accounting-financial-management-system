@@ -1,5 +1,5 @@
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
-const TOKEN_KEY = 'chaching_backend_token';
+const apiBaseUrl = "";
+const TOKEN_KEY = "chaching_backend_token";
 
 interface RequestOptions extends RequestInit {
   params?: Record<string, string>;
@@ -22,7 +22,7 @@ function getToken(): string | null {
 
 function clearToken(): void {
   localStorage.removeItem(TOKEN_KEY);
-  localStorage.removeItem('chaching_backend_user');
+  localStorage.removeItem("chaching_backend_user");
 }
 
 async function apiRequest<T>(
@@ -30,19 +30,19 @@ async function apiRequest<T>(
   options: RequestOptions = {}
 ): Promise<T> {
   const { params, body, ...rest } = options;
-  const url = new URL(`${API_BASE_URL}${path}`);
+  const url = new URL(`${apiBaseUrl}${path}`, window.location.origin);
   if (params) {
     Object.entries(params).forEach(([key, value]) => url.searchParams.set(key, value));
   }
 
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
+    "Content-Type": "application/json",
     ...(rest.headers as Record<string, string> || {}),
   };
 
   const token = getToken();
   if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
+    headers["Authorization"] = `Bearer ${token}`;
   }
 
   const response = await fetch(url.toString(), {
@@ -53,11 +53,11 @@ async function apiRequest<T>(
 
   if (response.status === 401) {
     clearToken();
-    window.location.href = '/';
-    throw new ApiError(401, { message: 'Unauthorized' });
+    window.location.href = "/";
+    throw new ApiError(401, { message: "Unauthorized" });
   }
 
-  const data = await response.json();
+  const data = await response.json().catch(() => ({}));
 
   if (!response.ok) {
     throw new ApiError(response.status, data);
@@ -71,17 +71,17 @@ export const api = {
     apiRequest<T>(path, { params }),
 
   post: <T>(path: string, body?: any) =>
-    apiRequest<T>(path, { method: 'POST', body }),
+    apiRequest<T>(path, { method: "POST", body }),
 
   put: <T>(path: string, body?: any) =>
-    apiRequest<T>(path, { method: 'PUT', body }),
+    apiRequest<T>(path, { method: "PUT", body }),
 
   delete: <T>(path: string) =>
-    apiRequest<T>(path, { method: 'DELETE' }),
+    apiRequest<T>(path, { method: "DELETE" }),
 
   getToken,
   clearToken,
-  getApiBaseUrl: () => API_BASE_URL,
+  getApiBaseUrl: () => apiBaseUrl,
 };
 
 export default api;
