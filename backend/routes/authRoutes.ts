@@ -7,6 +7,19 @@ import auth from "../middleware/auth.js";
 
 const router = createRouter();
 
+const normalizeExpiresIn = (): string | number => {
+  const raw = (process.env.JWT_EXPIRES_IN || "")
+    .trim()
+    .replace(/^["']+|["']+$/g, "")
+    .trim();
+  if (/^\d+$/.test(raw)) {
+    const seconds = Number(raw);
+    if (Number.isFinite(seconds) && seconds > 0) return seconds;
+  }
+  if (/^\d+(\.\d+)?(ms|s|m|h|d|w|y)$/i.test(raw)) return raw.toLowerCase();
+  return "7d";
+};
+
 const signToken = (userId: any) => {
   const secret = process.env.JWT_SECRET;
   if (!secret) {
@@ -16,7 +29,7 @@ const signToken = (userId: any) => {
     });
   }
   return jwt.sign({ id: userId }, secret, {
-    expiresIn: process.env.JWT_EXPIRES_IN || "7d",
+    expiresIn: normalizeExpiresIn(),
   } as any);
 };
 
