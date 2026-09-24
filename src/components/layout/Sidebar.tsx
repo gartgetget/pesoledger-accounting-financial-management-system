@@ -17,15 +17,20 @@ import {
   ShieldAlert,
   AlertTriangle,
   LogOut,
+  Building2,
+  ChevronDown,
 } from 'lucide-react';
 import { useAccounting } from '../../context/AccountingContext';
+import { useAuth } from '../../context/AuthContext';
 import { ActiveTab } from '../../types';
 
 export const Sidebar: React.FC = () => {
-  const { activeTab, setActiveTab, userRole, setUserRole, parts, companySettings, activeAccount, logout } = useAccounting();
+  const { activeTab, setActiveTab, userRole, setUserRole, parts, companySettings, logout } = useAccounting();
+  const { workspaces, activeWorkspace, selectWorkspace, isAuthenticated } = useAuth();
 
-  // Low stock counter
   const lowStockCount = parts.filter((p) => p.quantity <= p.minimumStock).length;
+
+  const [showWorkspaceList, setShowWorkspaceList] = React.useState(false);
 
   const navItems: { id: ActiveTab; label: string; icon: React.FC<any>; badge?: number }[] = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -46,7 +51,6 @@ export const Sidebar: React.FC = () => {
 
   return (
     <aside className="w-64 bg-slate-900 text-slate-300 flex flex-col shrink-0 border-r border-slate-800 min-h-screen select-none">
-      {/* Brand Header */}
       <div className="px-5 py-3 border-b border-slate-800">
         <div className="flex justify-center">
           <img
@@ -55,12 +59,40 @@ export const Sidebar: React.FC = () => {
             className="w-full max-w-[140px] h-auto rounded-lg bg-white object-contain p-1"
           />
         </div>
-        <p className="text-[11px] text-slate-500 mt-3 text-center truncate" title={companySettings.name}>
-          {companySettings.name || 'Your business ledger'}
-        </p>
+        <div className="mt-2 flex items-center gap-1.5 justify-center">
+          <Building2 className="w-3 h-3 text-emerald-400" />
+          <p className="text-[11px] text-emerald-400 font-semibold truncate" title={activeWorkspace?.name}>
+            {activeWorkspace?.name || companySettings.name || 'Your business ledger'}
+          </p>
+        </div>
+        {workspaces.length > 1 && (
+          <div className="relative mt-1">
+            <button
+              onClick={() => setShowWorkspaceList(!showWorkspaceList)}
+              className="w-full text-[10px] text-slate-500 hover:text-slate-300 flex items-center justify-center gap-1 cursor-pointer"
+            >
+              <ChevronDown className="w-3 h-3" />
+              {workspaces.length} workspaces
+            </button>
+            {showWorkspaceList && (
+              <div className="absolute bottom-full left-0 right-0 bg-slate-800 border border-slate-700 rounded-lg shadow-xl mb-1 overflow-hidden z-50">
+                {workspaces.map((ws) => (
+                  <button
+                    key={ws._id}
+                    onClick={() => { selectWorkspace(ws._id); setShowWorkspaceList(false); }}
+                    className={`w-full text-left px-3 py-2 text-xs hover:bg-slate-700 transition-colors ${
+                      activeWorkspace?._id === ws._id ? 'bg-emerald-600/20 text-emerald-300' : 'text-slate-300'
+                    }`}
+                  >
+                    {ws.name}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* Role Switcher banner */}
       <div className="px-4 py-2.5 bg-slate-950/60 border-b border-slate-800/80 flex items-center justify-between text-xs">
         <div className="flex items-center gap-1.5 text-slate-400">
           {userRole === 'admin' ? (
@@ -79,7 +111,6 @@ export const Sidebar: React.FC = () => {
         </button>
       </div>
 
-      {/* Navigation List */}
       <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
         <div className="px-3 pb-1 text-[10px] font-semibold tracking-wider text-slate-400 uppercase">
           Accounting Modules
@@ -112,12 +143,11 @@ export const Sidebar: React.FC = () => {
         })}
       </nav>
 
-      {/* System Status and Currency Tag */}
       <div className="p-3.5 border-t border-slate-800 text-[11px] text-slate-400 space-y-2">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-1.5 min-w-0">
             <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span>
-            <span className="truncate" title={activeAccount.name}>{activeAccount.name}</span>
+            <span className="truncate" title={activeWorkspace?.name}>{activeWorkspace?.name || 'Unknown'}</span>
           </div>
           <button onClick={logout} className="inline-flex items-center gap-1 text-slate-400 hover:text-rose-300 cursor-pointer" title="Log out">
             <LogOut className="w-3.5 h-3.5" />
