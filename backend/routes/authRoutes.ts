@@ -13,7 +13,10 @@ const signToken = (userId: any) =>
   } as any);
 
 router.post("/register", async (req, res) => {
-  const { fullName, email, password, workspaceName } = req.body;
+  const fullName = String(req.body.fullName || "").trim();
+  const email = String(req.body.email || "").trim().toLowerCase();
+  const password = String(req.body.password || "");
+  const workspaceName = String(req.body.workspaceName || "").trim();
 
   if (!fullName || !email || !password || !workspaceName) {
     return res.status(400).json({ message: "All fields are required" });
@@ -65,7 +68,8 @@ router.post("/register", async (req, res) => {
 });
 
 router.post("/login", async (req, res) => {
-  const { email, password } = req.body;
+  const email = String(req.body.email || "").trim().toLowerCase();
+  const password = String(req.body.password || "");
 
   if (!email || !password) {
     return res.status(400).json({ message: "Email and password required" });
@@ -73,11 +77,13 @@ router.post("/login", async (req, res) => {
 
   const user = await User.findOne({ email });
   if (!user) {
+    console.warn(`[auth] login failed: no user for email=${email}`);
     return res.status(401).json({ message: "Invalid credentials" });
   }
 
   const isValid = await bcrypt.compare(password, user.passwordHash);
   if (!isValid) {
+    console.warn(`[auth] login failed: bad password for email=${email}`);
     return res.status(401).json({ message: "Invalid credentials" });
   }
 
