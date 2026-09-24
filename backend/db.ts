@@ -19,9 +19,19 @@ async function connectDB(): Promise<void> {
   }
 
   if (!cached.promise) {
-    const uri = process.env.MONGO_URI;
+    const raw = process.env.MONGO_URI;
+    const uri = (raw || "")
+      .trim()
+      .replace(/^["']+|["']+$/g, "")
+      .trim();
     if (!uri) {
       throw new Error("MONGO_URI is not configured");
+    }
+    if (!/^(mongodb\+srv|mongodb):\/\//i.test(uri)) {
+      const preview = uri.slice(0, 24);
+      throw new Error(
+        `MONGO_URI must start with mongodb:// or mongodb+srv:// (got: "${preview}...")`,
+      );
     }
     cached.promise = mongoose.connect(uri).then((m) => {
       cached.conn = m;
