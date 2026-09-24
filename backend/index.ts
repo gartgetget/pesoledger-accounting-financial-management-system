@@ -57,21 +57,24 @@ app.use((err: any, _req: any, res: any, _next: any) => {
         ? 409
         : err.name === "ValidationError"
           ? 400
-          : /buffering timed out|ECONNREFUSED|MONGO_URI|MongoServerError|MongoNetworkError|MongooseError|MongooseServerSelectionError|MongoServerSelectionError|Server selection timed out/i.test(
-                `${err.name || ""} ${err.message || ""}`,
-              )
-            ? 503
-            : err.status && err.status >= 400 && err.status < 600
-              ? err.status
+          : err.status && err.status >= 400 && err.status < 600
+            ? err.status
+            : /buffering timed out|ECONNREFUSED|MONGO_URI|Invalid scheme|MongoServerError|MongoNetworkError|MongooseError|MongooseServerSelectionError|MongoServerSelectionError|Server selection timed out/i.test(
+                  `${err.name || ""} ${err.message || ""}`,
+                )
+              ? 503
               : 500;
   const message =
-    /MongooseServerSelectionError|MongoServerSelectionError|Server selection timed out|ECONNREFUSED|buffering timed out/i.test(
+    /MongooseServerSelectionError|MongoServerSelectionError|Server selection timed out|ECONNREFUSED|buffering timed out|Invalid scheme/i.test(
       `${err.name || ""} ${err.message || ""}`,
     )
-      ? "Database unavailable — check MONGO_URI and Atlas IP allowlist"
+      ? `Database unavailable — check MONGO_URI and Atlas IP allowlist (${err.message || err.name})`
       : err.message || "Internal server error";
   if (res.headersSent || res.writableEnded) return;
-  res.status(status).json({ message });
+  res.status(status).json({
+    message,
+    ...(err.mongoUriPreview ? { mongoUriPreview: err.mongoUriPreview } : {}),
+  });
 });
 
 export default app;

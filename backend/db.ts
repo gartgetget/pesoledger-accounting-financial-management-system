@@ -25,20 +25,27 @@ async function connectDB(): Promise<void> {
       .replace(/^["']+|["']+$/g, "")
       .trim();
     if (!uri) {
-      throw new Error("MONGO_URI is not configured");
+      const err: any = new Error("MONGO_URI is not configured");
+      err.status = 500;
+      throw err;
     }
     if (!/^(mongodb\+srv|mongodb):\/\//i.test(uri)) {
-      const preview = uri.slice(0, 24);
-      throw new Error(
-        `MONGO_URI must start with mongodb:// or mongodb+srv:// (got: "${preview}...")`,
+      const preview = JSON.stringify(uri.slice(0, 40));
+      const err: any = new Error(
+        `MONGO_URI must start with mongodb:// or mongodb+srv:// (got ${preview})`,
       );
+      err.status = 500;
+      throw err;
     }
     cached.promise = mongoose.connect(uri).then((m) => {
       cached.conn = m;
       return m;
     });
-    cached.promise.catch(() => {
+    void cached.promise.catch((e: any) => {
       cached.promise = null;
+      if (e && !e.mongoUriPreview) {
+        e.mongoUriPreview = uri.slice(0, 40);
+      }
     });
   }
 
