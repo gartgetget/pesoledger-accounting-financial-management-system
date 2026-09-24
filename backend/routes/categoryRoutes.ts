@@ -1,8 +1,8 @@
-import { Router } from "express";
+import { createRouter } from "../middleware/createRouter";
 import Category from "../models/Category";
 import auth from "../middleware/auth";
 
-const router = Router();
+const router = createRouter();
 
 router.use(auth);
 

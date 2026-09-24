@@ -1,8 +1,8 @@
-import { Router } from "express";
+import { createRouter } from "../middleware/createRouter";
 import PayrollEntry from "../models/PayrollEntry";
 import auth from "../middleware/auth";
 
-const router = Router();
+const router = createRouter();
 router.use(auth);
 
 const ensureWorkspaceAccess = (req: any, res: any, next: any) => {

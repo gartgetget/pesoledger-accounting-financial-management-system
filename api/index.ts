@@ -23,7 +23,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       method: req.method,
       url: req.url || "/",
       headers: req.headers,
-      body: req.body,
+      body: req.body ?? {},
       query: req.query,
       params: {},
       _body: true,
@@ -122,7 +122,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     };
 
     Object.defineProperty(serverRes, "headersSent", {
-      get: () => false,
+      get: () => serverRes.writableEnded,
       configurable: true,
     });
     Object.defineProperty(serverRes, "writableFinished", {
@@ -136,7 +136,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           message: "Gateway Timeout: the server did not receive a response in time",
         });
       });
-    }, 9000);
+    }, 28000);
 
     try {
       app(serverReq, serverRes);
@@ -150,9 +150,3 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   });
 }
-
-export const config = {
-  api: {
-    bodyParser: false,
-  },
-};

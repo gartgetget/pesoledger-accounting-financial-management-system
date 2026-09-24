@@ -61,14 +61,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     try {
       const user = await api.get<BackendUser>('/api/auth/me');
-      const workspaces = await api.get<BackendWorkspace[]>('/api/workspaces');
-      const activeWorkspaceId = user.workspaces?.[0] || null;
+      let workspaces: BackendWorkspace[] = [];
+      try {
+        workspaces = await api.get<BackendWorkspace[]>('/api/workspaces');
+      } catch (wsError: any) {
+        if (wsError?.status === 401) throw wsError;
+        workspaces = [];
+      }
+      const savedId = localStorage.getItem('active_workspace_id');
+      const activeWorkspaceId =
+        savedId && user.workspaces?.includes(savedId)
+          ? savedId
+          : user.workspaces?.[0] || null;
       const activeWorkspace = activeWorkspaceId
         ? workspaces.find((w) => w._id === activeWorkspaceId) || null
         : null;
       setState({ user, workspaces, activeWorkspaceId, activeWorkspace, isAuthenticated: true, isLoading: false });
-    } catch {
-      api.clearToken();
+    } catch (error: any) {
+      if (error?.status === 401 || !error?.status) {
+        api.clearToken();
+      }
       setState({ user: null, workspaces: [], activeWorkspaceId: null, activeWorkspace: null, isAuthenticated: false, isLoading: false });
     }
   }, []);

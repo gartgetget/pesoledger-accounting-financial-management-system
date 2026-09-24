@@ -1,12 +1,11 @@
 import React, { useState } from 'react';
 import { ArrowRight, LockKeyhole, UserPlus, Building2, Loader2 } from 'lucide-react';
-import { useAccounting } from '../../context/AccountingContext';
 import { useAuth } from '../../context/AuthContext';
 
 export const LoginView: React.FC = () => {
-  const { createAccount } = useAccounting();
   const { login: authLogin, register: authRegister, workspaces, activeWorkspaceId, selectWorkspace, isAuthenticated, isLoading } = useAuth();
   const [mode, setMode] = useState<'login' | 'register'>('login');
+  const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [workspaceName, setWorkspaceName] = useState('');
   const [password, setPassword] = useState('');
@@ -29,7 +28,7 @@ export const LoginView: React.FC = () => {
     setIsSubmitting(true);
     setError('');
     try {
-      await authRegister(name, userEmail.trim(), userPassword, userWorkspaceName.trim());
+      await authRegister(name.trim(), userEmail.trim(), userPassword, userWorkspaceName.trim());
     } catch (registerError) {
       setError(registerError instanceof Error ? registerError.message : 'Unable to create the account.');
     } finally {
@@ -40,29 +39,23 @@ export const LoginView: React.FC = () => {
   const handleLogin = async (event: React.FormEvent) => {
     event.preventDefault();
     setError('');
-    if (email.trim()) {
-      try {
-        await handleBackendLogin(email.trim(), password);
-        return;
-      } catch { return; }
+    if (!email.trim()) {
+      setError('Email is required.');
+      return;
     }
     if (!password.trim()) {
       setError('Password is required.');
       return;
     }
-    createAccount('Main Admin', password.trim());
-    setError('');
+    await handleBackendLogin(email.trim(), password);
   };
 
   const handleRegister = async (event: React.FormEvent) => {
     event.preventDefault();
     setError('');
     if (password.length < 4) { setError('Use a password with at least 4 characters.'); return; }
-    if (!email.trim() || !workspaceName.trim()) { setError('Email and workspace name are required.'); return; }
-    try {
-      await handleBackendRegister(workspaceName.trim(), email.trim(), password, workspaceName.trim());
-      return;
-    } catch { return; }
+    if (!fullName.trim() || !email.trim() || !workspaceName.trim()) { setError('Full name, email, and workspace name are required.'); return; }
+    await handleBackendRegister(fullName, email.trim(), password, workspaceName.trim());
   };
 
   const handleWorkspaceSelect = async (workspaceId: string) => {
@@ -138,7 +131,7 @@ export const LoginView: React.FC = () => {
             <form onSubmit={handleLogin} className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">Email</label>
-                <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="admin@email.com" className="w-full text-sm px-3 py-2.5 border border-slate-300 rounded-lg" />
+                <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="admin@email.com" className="w-full text-sm px-3 py-2.5 border border-slate-300 rounded-lg" required />
               </div>
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">Password</label>
@@ -152,6 +145,10 @@ export const LoginView: React.FC = () => {
             </form>
           ) : (
             <form onSubmit={handleRegister} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Full name</label>
+                <input type="text" value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Juan Dela Cruz" className="w-full text-sm px-3 py-2.5 border border-slate-300 rounded-lg" required />
+              </div>
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">Workspace name</label>
                 <input type="text" value={workspaceName} onChange={(e) => setWorkspaceName(e.target.value)} placeholder="ChaChing Accounting" className="w-full text-sm px-3 py-2.5 border border-slate-300 rounded-lg" required />

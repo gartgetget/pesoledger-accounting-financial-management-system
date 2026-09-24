@@ -24,8 +24,17 @@ import { LoginView } from './components/auth/LoginView';
 import { RevenueTransaction, Expense, ServiceJob } from './types';
 
 const MainAppContent: React.FC = () => {
-  const { activeTab, isAuthenticated } = useAccounting();
+  const { activeTab } = useAccounting();
   const { isLoading, isAuthenticated: authIsAuthenticated } = useAuth();
+
+  const [isRevenueModalOpen, setIsRevenueModalOpen] = useState(false);
+  const [editingRevenue, setEditingRevenue] = useState<RevenueTransaction | null>(null);
+
+  const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
+  const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
+
+  const [isJobModalOpen, setIsJobModalOpen] = useState(false);
+  const [editingJob, setEditingJob] = useState<ServiceJob | null>(null);
 
   if (isLoading) {
     return (
@@ -41,16 +50,6 @@ const MainAppContent: React.FC = () => {
   if (!authIsAuthenticated) {
     return <LoginView />;
   }
-
-  // Global Modals State
-  const [isRevenueModalOpen, setIsRevenueModalOpen] = useState(false);
-  const [editingRevenue, setEditingRevenue] = useState<RevenueTransaction | null>(null);
-
-  const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
-  const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
-
-  const [isJobModalOpen, setIsJobModalOpen] = useState(false);
-  const [editingJob, setEditingJob] = useState<ServiceJob | null>(null);
 
   const handleOpenRevenueModal = () => {
     setEditingRevenue(null);

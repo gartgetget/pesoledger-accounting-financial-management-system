@@ -1,7 +1,7 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
-import "./db";
+import connectDB from "./db";
 import authRoutes from "./routes/authRoutes";
 import workspaceRoutes from "./routes/workspaceRoutes";
 import categoryRoutes from "./routes/categoryRoutes";
@@ -22,6 +22,12 @@ app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+app.use((_req, _res, next) => {
+  connectDB()
+    .then(() => next())
+    .catch(next);
+});
+
 app.get("/", (_req, res) => {
   res.json({ message: "ChaChing API is running" });
 });
@@ -40,6 +46,23 @@ app.use("/api", vehiclesRoutes);
 
 app.use((_req, res) => {
   res.status(404).json({ message: "Not found" });
+});
+
+app.use((err: any, _req: any, res: any, _next: any) => {
+  console.error(err);
+  const status =
+    err.name === "CastError"
+      ? 400
+      : err.code === 11000
+        ? 409
+        : err.name === "ValidationError"
+          ? 400
+          : /buffering timed out|ECONNREFUSED|MONGO_URI|MongoServerError|MongoNetworkError|MongooseError/i.test(
+                `${err.name || ""} ${err.message || ""}`,
+              )
+            ? 503
+            : 500;
+  res.status(status).json({ message: err.message || "Internal server error" });
 });
 
 export default app;

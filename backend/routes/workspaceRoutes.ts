@@ -1,9 +1,9 @@
-import { Router } from "express";
+import { createRouter } from "../middleware/createRouter";
 import Workspace from "../models/Workspace";
 import User from "../models/User";
 import auth from "../middleware/auth";
 
-const router = Router();
+const router = createRouter();
 
 router.use(auth);
 

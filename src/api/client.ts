@@ -51,13 +51,17 @@ async function apiRequest<T>(
     body: body ? JSON.stringify(body) : undefined,
   });
 
-  if (response.status === 401) {
-    clearToken();
-    window.location.href = "/";
-    throw new ApiError(401, { message: "Unauthorized" });
-  }
-
   const data = await response.json().catch(() => ({}));
+
+  if (response.status === 401) {
+    const isAuthAttempt =
+      path.includes("/api/auth/login") || path.includes("/api/auth/register");
+    if (!isAuthAttempt) {
+      clearToken();
+      window.location.href = "/";
+    }
+    throw new ApiError(401, data);
+  }
 
   if (!response.ok) {
     throw new ApiError(response.status, data);

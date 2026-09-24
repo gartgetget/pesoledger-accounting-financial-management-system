@@ -1,10 +1,11 @@
-import { Router } from "express";
+import { createRouter } from "../middleware/createRouter";
 import Vehicle from "../models/Vehicle";
+import VehicleExpense from "../models/VehicleExpense";
 import Employee from "../models/Employee";
 import PaymentMethod from "../models/PaymentMethod";
 import auth from "../middleware/auth";
 
-const router = Router();
+const router = createRouter();
 router.use(auth);
 
 const ensureWorkspaceAccess = (req: any, res: any, next: any) => {
@@ -69,7 +70,7 @@ router.delete("/:workspaceId/vehicles/:id", ensureWorkspaceAccess, async (req, r
 
 router.get("/:workspaceId/vehicle-expenses", ensureWorkspaceAccess, async (req, res) => {
   const { workspaceId } = req.params;
-  const expenses = await Vehicle.find({ workspaceId }).populate("vehicleId");
+  const expenses = await VehicleExpense.find({ workspaceId }).sort({ date: -1 });
   res.json(expenses);
 });
 
@@ -84,7 +85,7 @@ router.post("/:workspaceId/vehicle-expenses", ensureWorkspaceAccess, async (req,
   const vehicle = await Vehicle.findOne({ _id: vehicleId, workspaceId });
   if (!vehicle) return res.status(404).json({ message: "Vehicle not found" });
 
-  const expenseEntry = {
+  const expenseEntry = await VehicleExpense.create({
     workspaceId, vehicleId,
     vehicleName: vehicleName || vehicle.vehicleName,
     date: new Date(date),
@@ -96,7 +97,7 @@ router.post("/:workspaceId/vehicle-expenses", ensureWorkspaceAccess, async (req,
     description: description || "",
     notes: notes || "",
     createdBy: req.user._id.toString(),
-  };
+  });
 
   res.status(201).json(expenseEntry);
 });

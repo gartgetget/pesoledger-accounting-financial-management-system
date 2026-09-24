@@ -1,11 +1,16 @@
-import { Router } from "express";
+import { createRouter } from "../middleware/createRouter";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import User from "../models/User";
 import Workspace from "../models/Workspace";
 import auth from "../middleware/auth";
 
-const router = Router();
+const router = createRouter();
+
+const signToken = (userId: any) =>
+  jwt.sign({ id: userId }, process.env.JWT_SECRET!, {
+    expiresIn: process.env.JWT_EXPIRES_IN || "7d",
+  } as any);
 
 router.post("/register", async (req, res) => {
   const { fullName, email, password, workspaceName } = req.body;
@@ -28,32 +33,35 @@ router.post("/register", async (req, res) => {
     role: "admin",
   });
 
-  const workspace = await Workspace.create({
-    name: workspaceName,
-    ownerId: user._id.toString(),
-    settings: {
-      currency: "PHP",
-      businessName: workspaceName,
-    },
-  });
+  try {
+    const workspace = await Workspace.create({
+      name: workspaceName,
+      ownerId: user._id.toString(),
+      settings: {
+        currency: "PHP",
+        businessName: workspaceName,
+      },
+    });
 
-  user.workspaces = [workspace._id.toString()];
-  await user.save();
+    user.workspaces = [workspace._id.toString()];
+    await user.save();
 
-  const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET!, {
-    expiresIn: process.env.JWT_EXPIRES_IN,
-  } as any);
+    const token = signToken(user._id);
 
-  res.status(201).json({
-    token,
-    user: {
-      _id: user._id,
-      fullName: user.fullName,
-      email: user.email,
-      role: user.role,
-    },
-    workspace,
-  });
+    res.status(201).json({
+      token,
+      user: {
+        _id: user._id,
+        fullName: user.fullName,
+        email: user.email,
+        role: user.role,
+      },
+      workspace,
+    });
+  } catch (err) {
+    await User.deleteOne({ _id: user._id }).catch(() => {});
+    throw err;
+  }
 });
 
 router.post("/login", async (req, res) => {
@@ -73,9 +81,7 @@ router.post("/login", async (req, res) => {
     return res.status(401).json({ message: "Invalid credentials" });
   }
 
-  const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET!, {
-    expiresIn: process.env.JWT_EXPIRES_IN,
-  } as any);
+  const token = signToken(user._id);
 
   const workspace = user.workspaces?.[0]
     ? await Workspace.findById(user.workspaces[0])

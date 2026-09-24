@@ -9,19 +9,23 @@ const auth = async (req: any, res: any, next: any) => {
   }
 
   const token = authHeader.split(" ")[1];
+  let decoded: jwt.JwtPayload;
 
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET!) as jwt.JwtPayload;
-    const user = await User.findById(decoded.id);
+    decoded = jwt.verify(token, process.env.JWT_SECRET!) as jwt.JwtPayload;
+  } catch {
+    return res.status(401).json({ message: "Invalid token" });
+  }
 
+  try {
+    const user = await User.findById(decoded.id);
     if (!user) {
       return res.status(401).json({ message: "User not found" });
     }
-
     req.user = user;
     next();
   } catch (error) {
-    return res.status(401).json({ message: "Invalid token" });
+    next(error);
   }
 };
 
