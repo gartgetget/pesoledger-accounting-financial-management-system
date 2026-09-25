@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { AccountingProvider, useAccounting } from './context/AccountingContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ToastProvider } from './components/layout/ToastProvider';
@@ -23,6 +23,7 @@ import { MigrationView } from './components/migration/MigrationView';
 import { SettingsView } from './components/settings/SettingsView';
 import { AuditView } from './components/audit/AuditView';
 import { LoginView } from './components/auth/LoginView';
+import { AuthSuccessView } from './components/auth/AuthSuccessView';
 import { RevenueTransaction, Expense, ServiceJob } from './types';
 
 const MainAppContent: React.FC = () => {
@@ -40,6 +41,9 @@ const MainAppContent: React.FC = () => {
 
   const [isNavOpen, setIsNavOpen] = useState(false);
 
+  const [authNotice, setAuthNotice] = useState<string | null>(null);
+  const dismissAuthNotice = useCallback(() => setAuthNotice(null), []);
+
   if (isLoading) {
     return (
       <main className="min-h-screen bg-slate-100 flex items-center justify-center">
@@ -51,8 +55,12 @@ const MainAppContent: React.FC = () => {
     );
   }
 
+  if (authNotice) {
+    return <AuthSuccessView message={authNotice} onDone={dismissAuthNotice} />;
+  }
+
   if (!authIsAuthenticated) {
-    return <LoginView />;
+    return <LoginView onAuthSuccess={setAuthNotice} />;
   }
 
   const handleOpenRevenueModal = () => {
