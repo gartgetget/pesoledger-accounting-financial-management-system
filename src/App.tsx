@@ -96,7 +96,7 @@ const MainAppContent: React.FC = () => {
   return (
     <div className="flex h-screen bg-slate-50 text-slate-800 font-sans antialiased overflow-hidden">
       {/* 1. SIDEBAR NAVIGATION (off-canvas drawer below lg) */}
-      <Sidebar onNavigate={() => setIsNavOpen(false)} />
+      <Sidebar isOpen={isNavOpen} onNavigate={() => setIsNavOpen(false)} />
 
       {isNavOpen && (
         <div

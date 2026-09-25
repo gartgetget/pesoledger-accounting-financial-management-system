@@ -25,7 +25,7 @@ import { useAccounting } from '../../context/AccountingContext';
 import { useAuth } from '../../context/AuthContext';
 import { ActiveTab } from '../../types';
 
-export const Sidebar: React.FC<{ onNavigate?: () => void }> = ({ onNavigate }) => {
+export const Sidebar: React.FC<{ isOpen?: boolean; onNavigate?: () => void }> = ({ isOpen, onNavigate }) => {
   const { activeTab, setActiveTab, userRole, setUserRole, parts, companySettings, logout } = useAccounting();
   const { workspaces, activeWorkspace, selectWorkspace, isAuthenticated } = useAuth();
 
@@ -52,7 +52,7 @@ export const Sidebar: React.FC<{ onNavigate?: () => void }> = ({ onNavigate }) =
   ];
 
   return (
-    <aside className="fixed inset-y-0 left-0 z-50 w-64 bg-slate-900 text-slate-300 flex flex-col shrink-0 border-r border-slate-800 select-none overflow-hidden -translate-x-full lg:static lg:translate-x-0 lg:z-auto transition-transform duration-200 ease-out">
+    <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-slate-900 text-slate-300 flex flex-col shrink-0 border-r border-slate-800 select-none overflow-hidden transition-transform duration-200 ease-out lg:static lg:z-auto lg:translate-x-0 ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
       <div className="px-5 py-3 border-b border-slate-800">
         <div className="flex justify-center">
           <img
