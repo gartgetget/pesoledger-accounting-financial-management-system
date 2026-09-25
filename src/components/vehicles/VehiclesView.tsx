@@ -242,10 +242,10 @@ export const VehiclesView: React.FC = () => {
                 <th className="py-2.5 px-4">Date</th>
                 <th className="py-2.5 px-4">Vehicle</th>
                 <th className="py-2.5 px-4">Expense Type</th>
-                <th className="py-2.5 px-4">Particulars</th>
+                <th className="py-2.5 px-4 hidden md:table-cell">Particulars</th>
                 <th className="py-2.5 px-4">Driver / Person</th>
                 <th className="py-2.5 px-4 text-right">Amount (₱)</th>
-                <th className="py-2.5 px-4">Remarks</th>
+                <th className="py-2.5 px-4 hidden md:table-cell">Remarks</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -267,12 +267,12 @@ export const VehiclesView: React.FC = () => {
                     <td className="py-2.5 px-4 whitespace-nowrap">
                       <span className="font-semibold text-orange-800">{v.expenseType}</span>
                     </td>
-                    <td className="py-2.5 px-4 text-slate-700 truncate max-w-xs">{v.description}</td>
+                    <td className="py-2.5 px-4 text-slate-700 truncate max-w-xs hidden md:table-cell">{v.description}</td>
                     <td className="py-2.5 px-4 text-slate-600 whitespace-nowrap">{v.driverResponsible}</td>
                     <td className="py-2.5 px-4 text-right font-mono font-bold text-orange-800 tabular-nums whitespace-nowrap text-sm">
                       {formatPHP(v.amount)}
                     </td>
-                    <td className="py-2.5 px-4 text-slate-400 text-[11px] truncate max-w-[140px]">{v.notes || '—'}</td>
+                    <td className="py-2.5 px-4 text-slate-400 text-[11px] truncate max-w-[140px] hidden md:table-cell">{v.notes || '—'}</td>
                   </tr>
                 ))
               )}
@@ -283,8 +283,8 @@ export const VehiclesView: React.FC = () => {
 
       {/* MODAL: LOG VEHICLE EXPENSE */}
       {showLogExpenseModal && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl border border-slate-200 w-full max-w-md p-5 animate-in fade-in zoom-in-95 duration-150">
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center z-50 p-4 overflow-y-auto">
+          <div className="bg-white rounded-xl shadow-xl border border-slate-200 w-full max-w-md p-5 my-auto animate-in fade-in zoom-in-95 duration-150">
             <h3 className="text-sm font-bold text-slate-900 mb-3 flex items-center gap-2">
               <Fuel className="w-4 h-4 text-orange-600" />
               Log Vehicle Outflow (Sasakyan / Gas)
@@ -308,7 +308,7 @@ export const VehiclesView: React.FC = () => {
                 </select>
               </div>
 
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <div>
                   <label className="block text-xs font-medium text-slate-700 mb-1">
                     Date <span className="text-rose-500">*</span>
@@ -355,7 +355,7 @@ export const VehiclesView: React.FC = () => {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <div>
                   <label className="block text-xs font-medium text-slate-700 mb-1">
                     Amount (₱) <span className="text-rose-500">*</span>
@@ -424,8 +424,8 @@ export const VehiclesView: React.FC = () => {
 
       {/* MODAL: ADD VEHICLE */}
       {showAddVehicleModal && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl border border-slate-200 w-full max-w-sm p-5 animate-in fade-in zoom-in-95 duration-150">
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center z-50 p-4 overflow-y-auto">
+          <div className="bg-white rounded-xl shadow-xl border border-slate-200 w-full max-w-sm p-5 my-auto animate-in fade-in zoom-in-95 duration-150">
             <h3 className="text-sm font-bold text-slate-900 mb-3 flex items-center gap-2">
               <Car className="w-4 h-4 text-orange-600" />
               Register Fleet Vehicle

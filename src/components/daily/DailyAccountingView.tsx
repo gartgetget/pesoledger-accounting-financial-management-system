@@ -125,7 +125,7 @@ export const DailyAccountingView: React.FC<{
         </div>
 
         {/* Date Selector Controls */}
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={() => {
               const d = new Date(selectedDate);
@@ -141,7 +141,7 @@ export const DailyAccountingView: React.FC<{
             type="date"
             value={selectedDate}
             onChange={(e) => setSelectedDate(e.target.value)}
-            className="text-xs px-3 py-1.5 border border-slate-300 rounded-lg font-semibold text-slate-800 bg-slate-50"
+            className="text-xs px-3 py-1.5 border border-slate-300 rounded-lg font-semibold text-slate-800 bg-slate-50 min-w-0"
           />
 
           <button

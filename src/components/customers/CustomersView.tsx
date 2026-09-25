@@ -180,8 +180,8 @@ export const CustomersView: React.FC = () => {
 
       {/* ADD CUSTOMER MODAL */}
       {showAddModal && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl border border-slate-200 w-full max-w-sm p-5 animate-in fade-in zoom-in-95 duration-150">
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center z-50 p-4 overflow-y-auto">
+          <div className="bg-white rounded-xl shadow-xl border border-slate-200 w-full max-w-sm p-5 my-auto animate-in fade-in zoom-in-95 duration-150">
             <h3 className="text-sm font-bold text-slate-900 mb-3 flex items-center gap-2">
               <UserCheck className="w-4 h-4 text-teal-600" />
               Add Customer Account

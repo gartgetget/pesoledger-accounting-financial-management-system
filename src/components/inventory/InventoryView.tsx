@@ -335,8 +335,8 @@ export const InventoryView: React.FC = () => {
 
       {/* RESTOCK MODAL */}
       {restockModalTarget && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl border border-slate-200 w-full max-w-sm p-5 animate-in fade-in zoom-in-95 duration-150">
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center z-50 p-4 overflow-y-auto">
+          <div className="bg-white rounded-xl shadow-xl border border-slate-200 w-full max-w-sm p-5 my-auto animate-in fade-in zoom-in-95 duration-150">
             <h3 className="text-sm font-bold text-slate-900 mb-2 flex items-center gap-2">
               <RefreshCw className="w-4 h-4 text-amber-600" />
               Restock {restockModalTarget.name}
@@ -381,8 +381,8 @@ export const InventoryView: React.FC = () => {
 
       {/* ADD PART MODAL */}
       {showAddModal && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl border border-slate-200 w-full max-w-md p-5 animate-in fade-in zoom-in-95 duration-150">
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center z-50 p-4 overflow-y-auto">
+          <div className="bg-white rounded-xl shadow-xl border border-slate-200 w-full max-w-md p-5 my-auto animate-in fade-in zoom-in-95 duration-150">
             <h3 className="text-sm font-bold text-slate-900 mb-3 flex items-center gap-2">
               <Package className="w-4 h-4 text-amber-600" />
               Register New Appliance Part
@@ -402,7 +402,7 @@ export const InventoryView: React.FC = () => {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <div>
                   <label className="block text-xs font-medium text-slate-700 mb-1">
                     Part / SKU # <span className="text-rose-500">*</span>
@@ -437,7 +437,7 @@ export const InventoryView: React.FC = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <div>
                   <label className="block text-xs font-medium text-slate-700 mb-1">
                     Cost Price (₱) <span className="text-rose-500">*</span>
@@ -469,7 +469,7 @@ export const InventoryView: React.FC = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <div>
                   <label className="block text-xs font-medium text-slate-700 mb-1">
                     Initial Stock

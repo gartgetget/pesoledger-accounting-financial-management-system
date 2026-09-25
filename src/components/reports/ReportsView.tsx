@@ -116,7 +116,7 @@ export const ReportsView: React.FC = () => {
       </div>
 
       {/* TABS SWITCHER (Hidden on Print) */}
-      <div className="flex items-center gap-2 border-b border-slate-200 pb-2 text-xs font-semibold print:hidden">
+      <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 pb-2 text-xs font-semibold print:hidden">
         <button
           onClick={() => setActiveReportTab('pnl')}
           className={`px-3 py-1.5 rounded-lg cursor-pointer ${

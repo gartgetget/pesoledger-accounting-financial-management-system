@@ -171,13 +171,13 @@ export const PayrollView: React.FC = () => {
             <thead className="bg-slate-50 text-slate-500 uppercase tracking-wider font-semibold border-b border-slate-200">
               <tr>
                 <th className="py-2.5 px-4">Date</th>
-                <th className="py-2.5 px-4">Period</th>
+                <th className="py-2.5 px-4 hidden md:table-cell">Period</th>
                 <th className="py-2.5 px-4">Employee</th>
                 <th className="py-2.5 px-4 text-right">Base Pay</th>
-                <th className="py-2.5 px-4 text-right">OT / Add-ons</th>
+                <th className="py-2.5 px-4 text-right hidden md:table-cell">OT / Add-ons</th>
                 <th className="py-2.5 px-4 text-right">Deductions</th>
                 <th className="py-2.5 px-4 text-right">Net Take-Home</th>
-                <th className="py-2.5 px-4">Account Paid</th>
+                <th className="py-2.5 px-4 hidden md:table-cell">Account Paid</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 font-mono">
@@ -193,7 +193,7 @@ export const PayrollView: React.FC = () => {
                     <td className="py-2.5 px-4 font-sans font-medium text-slate-700 whitespace-nowrap">
                       {formatDateDisplay(r.date)}
                     </td>
-                    <td className="py-2.5 px-4 font-sans text-slate-600 whitespace-nowrap">
+                    <td className="py-2.5 px-4 font-sans text-slate-600 whitespace-nowrap hidden md:table-cell">
                       {r.period}
                     </td>
                     <td className="py-2.5 px-4 font-sans font-bold text-slate-900 whitespace-nowrap">
@@ -202,7 +202,7 @@ export const PayrollView: React.FC = () => {
                     <td className="py-2.5 px-4 text-right text-slate-700 tabular-nums">
                       {formatPHP(r.basicSalary)}
                     </td>
-                    <td className="py-2.5 px-4 text-right text-emerald-700 tabular-nums">
+                    <td className="py-2.5 px-4 text-right text-emerald-700 tabular-nums hidden md:table-cell">
                       +{formatPHP(r.overtimePay + r.incentives + r.foodAllowance)}
                     </td>
                     <td className="py-2.5 px-4 text-right text-rose-700 tabular-nums">
@@ -211,7 +211,7 @@ export const PayrollView: React.FC = () => {
                     <td className="py-2.5 px-4 text-right font-bold text-indigo-800 tabular-nums text-sm">
                       {formatPHP(r.netSalary)}
                     </td>
-                    <td className="py-2.5 px-4 font-sans text-slate-600 whitespace-nowrap">
+                    <td className="py-2.5 px-4 font-sans text-slate-600 whitespace-nowrap hidden md:table-cell">
                       {getMethodName(r.paymentMethodId)}
                     </td>
                   </tr>
@@ -227,8 +227,8 @@ export const PayrollView: React.FC = () => {
 
       {/* ADD EMPLOYEE MODAL */}
       {showAddEmpModal && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl border border-slate-200 w-full max-w-sm p-5 animate-in fade-in zoom-in-95 duration-150">
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center z-50 p-4 overflow-y-auto">
+          <div className="bg-white rounded-xl shadow-xl border border-slate-200 w-full max-w-sm p-5 my-auto animate-in fade-in zoom-in-95 duration-150">
             <h3 className="text-sm font-bold text-slate-900 mb-3 flex items-center gap-2">
               <UserPlus className="w-4 h-4 text-indigo-600" />
               Add New Staff / Technician

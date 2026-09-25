@@ -25,7 +25,7 @@ import { useAccounting } from '../../context/AccountingContext';
 import { useAuth } from '../../context/AuthContext';
 import { ActiveTab } from '../../types';
 
-export const Sidebar: React.FC = () => {
+export const Sidebar: React.FC<{ onNavigate?: () => void }> = ({ onNavigate }) => {
   const { activeTab, setActiveTab, userRole, setUserRole, parts, companySettings, logout } = useAccounting();
   const { workspaces, activeWorkspace, selectWorkspace, isAuthenticated } = useAuth();
 
@@ -52,7 +52,7 @@ export const Sidebar: React.FC = () => {
   ];
 
   return (
-    <aside className="w-64 bg-slate-900 text-slate-300 flex flex-col shrink-0 border-r border-slate-800 min-h-screen select-none">
+    <aside className="fixed inset-y-0 left-0 z-50 w-64 bg-slate-900 text-slate-300 flex flex-col shrink-0 border-r border-slate-800 select-none overflow-hidden -translate-x-full lg:static lg:translate-x-0 lg:z-auto transition-transform duration-200 ease-out">
       <div className="px-5 py-3 border-b border-slate-800">
         <div className="flex justify-center">
           <img
@@ -123,7 +123,10 @@ export const Sidebar: React.FC = () => {
           return (
             <button
               key={item.id}
-              onClick={() => setActiveTab(item.id)}
+              onClick={() => {
+                setActiveTab(item.id);
+                onNavigate?.();
+              }}
               className={`w-full flex items-center justify-between px-3 py-2 text-xs font-medium rounded-md transition-colors text-left cursor-pointer ${
                 isActive
                   ? 'bg-emerald-600/20 text-emerald-300 border-l-2 border-emerald-500 font-semibold'

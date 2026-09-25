@@ -26,9 +26,9 @@ export const JobInvoiceModal: React.FC<JobInvoiceModalProps> = ({ job, onClose }
 
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 overflow-y-auto">
-      <div className="bg-white rounded-xl shadow-2xl border border-slate-300 w-full max-w-2xl p-6 sm:p-8 animate-in fade-in zoom-in-95 duration-150 my-6">
+      <div className="bg-white rounded-xl shadow-2xl border border-slate-300 w-full max-w-2xl p-6 sm:p-8 animate-in fade-in zoom-in-95 duration-150 my-auto">
         {/* Modal Top Actions (Hidden on Print) */}
-        <div className="flex items-center justify-between pb-4 mb-4 border-b border-slate-200 print:hidden">
+        <div className="flex flex-wrap items-center justify-between gap-2 pb-4 mb-4 border-b border-slate-200 print:hidden">
           <div className="flex items-center gap-2">
             <span className="text-xs font-semibold px-2 py-0.5 rounded bg-slate-100 text-slate-700">
               Invoice Preview
@@ -39,9 +39,10 @@ export const JobInvoiceModal: React.FC<JobInvoiceModalProps> = ({ job, onClose }
             <button
               onClick={handlePrint}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-semibold cursor-pointer"
+              aria-label="Print invoice receipt"
             >
               <Printer className="w-3.5 h-3.5" />
-              <span>Print Invoice Receipt</span>
+              <span className="hidden sm:inline">Print Invoice Receipt</span>
             </button>
             <button
               onClick={onClose}
@@ -83,7 +84,7 @@ export const JobInvoiceModal: React.FC<JobInvoiceModalProps> = ({ job, onClose }
           </div>
 
           {/* Client & Service Info */}
-          <div className="grid grid-cols-2 gap-4 p-4 bg-slate-50 rounded-lg text-xs">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 bg-slate-50 rounded-lg text-xs">
             <div>
               <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">
                 Billed To Customer
@@ -103,6 +104,7 @@ export const JobInvoiceModal: React.FC<JobInvoiceModalProps> = ({ job, onClose }
 
           {/* Line Items Table */}
           <div className="border border-slate-200 rounded-lg overflow-hidden text-xs">
+            <div className="overflow-x-auto">
             <table className="w-full text-left">
               <thead className="bg-slate-100 text-slate-600 uppercase text-[10px] font-semibold">
                 <tr>
@@ -155,6 +157,7 @@ export const JobInvoiceModal: React.FC<JobInvoiceModalProps> = ({ job, onClose }
                 )}
               </tbody>
             </table>
+            </div>
           </div>
 
           {/* Financial Breakdown */}

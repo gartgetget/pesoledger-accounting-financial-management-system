@@ -38,6 +38,8 @@ const MainAppContent: React.FC = () => {
   const [isJobModalOpen, setIsJobModalOpen] = useState(false);
   const [editingJob, setEditingJob] = useState<ServiceJob | null>(null);
 
+  const [isNavOpen, setIsNavOpen] = useState(false);
+
   if (isLoading) {
     return (
       <main className="min-h-screen bg-slate-100 flex items-center justify-center">
@@ -85,8 +87,16 @@ const MainAppContent: React.FC = () => {
 
   return (
     <div className="flex h-screen bg-slate-50 text-slate-800 font-sans antialiased overflow-hidden">
-      {/* 1. SIDEBAR NAVIGATION */}
-      <Sidebar />
+      {/* 1. SIDEBAR NAVIGATION (off-canvas drawer below lg) */}
+      <Sidebar onNavigate={() => setIsNavOpen(false)} />
+
+      {isNavOpen && (
+        <div
+          className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-40 lg:hidden"
+          onClick={() => setIsNavOpen(false)}
+          aria-hidden="true"
+        />
+      )}
 
       {/* 2. MAIN APPLICATION CONTENT AREA */}
       <div className="flex-1 min-w-0 flex flex-col h-full overflow-hidden">
@@ -95,6 +105,7 @@ const MainAppContent: React.FC = () => {
           onOpenRevenueModal={handleOpenRevenueModal}
           onOpenExpenseModal={handleOpenExpenseModal}
           onOpenJobModal={handleOpenJobModal}
+          onToggleNav={() => setIsNavOpen((open) => !open)}
         />
 
         {/* Scrollable View Container */}

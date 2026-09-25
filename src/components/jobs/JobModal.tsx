@@ -192,7 +192,7 @@ export const JobModal: React.FC<JobModalProps> = ({
 
   return (
     <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center z-50 p-4 overflow-y-auto">
-      <div className="bg-white rounded-xl shadow-2xl border border-slate-200 w-full max-w-2xl p-6 animate-in fade-in zoom-in-95 duration-150 my-8">
+      <div className="bg-white rounded-xl shadow-2xl border border-slate-200 w-full max-w-2xl p-6 animate-in fade-in zoom-in-95 duration-150 my-auto">
         <div className="flex items-center justify-between pb-3 border-b border-slate-100">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-lg bg-slate-900 text-white flex items-center justify-center font-bold">
@@ -329,11 +329,11 @@ export const JobModal: React.FC<JobModalProps> = ({
             </div>
 
             {/* Selector Bar */}
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <select
                 value={partToAddId}
                 onChange={(e) => setPartToAddId(e.target.value)}
-                className="flex-1 text-xs px-3 py-1.5 border border-slate-300 rounded-lg bg-white"
+                className="flex-1 min-w-0 text-xs px-3 py-1.5 border border-slate-300 rounded-lg bg-white"
               >
                 {parts.map((p) => (
                   <option key={p.id} value={p.id}>
@@ -362,6 +362,7 @@ export const JobModal: React.FC<JobModalProps> = ({
             {/* Selected Parts Table */}
             {selectedParts.length > 0 && (
               <div className="bg-white rounded border border-slate-200 overflow-hidden mt-2">
+                <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs">
                   <thead className="bg-slate-100 text-slate-600 text-[10px] uppercase font-semibold">
                     <tr>
@@ -398,6 +399,7 @@ export const JobModal: React.FC<JobModalProps> = ({
                     ))}
                   </tbody>
                 </table>
+                </div>
               </div>
             )}
           </div>

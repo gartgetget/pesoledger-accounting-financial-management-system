@@ -119,7 +119,7 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <div className="text-right px-4 py-2 bg-rose-50 rounded-lg border border-rose-200">
             <span className="text-[10px] uppercase font-bold text-rose-700 tracking-wider block">Total Filtered Outflow</span>
             <span className="text-base font-bold font-mono text-rose-800 tabular-nums">
@@ -239,9 +239,9 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
                 <th className="py-3 px-4">Category</th>
                 <th className="py-3 px-4">Particulars / Description</th>
                 <th className="py-3 px-4">Vendor / Supplier</th>
-                <th className="py-3 px-4">Person Responsible</th>
-                <th className="py-3 px-4">Payment Method</th>
-                <th className="py-3 px-4">OR / Ref #</th>
+                <th className="py-3 px-4 hidden md:table-cell">Person Responsible</th>
+                <th className="py-3 px-4 hidden md:table-cell">Payment Method</th>
+                <th className="py-3 px-4 hidden md:table-cell">OR / Ref #</th>
                 <th className="py-3 px-4 text-right">Amount (₱)</th>
                 <th className="py-3 px-4 text-center">Actions</th>
               </tr>
@@ -273,13 +273,13 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
                     <td className="py-3 px-4 text-slate-600 truncate max-w-[160px]" title={e.vendorSupplier}>
                       {e.vendorSupplier || '—'}
                     </td>
-                    <td className="py-3 px-4 text-slate-600 whitespace-nowrap">
+                    <td className="py-3 px-4 text-slate-600 whitespace-nowrap hidden md:table-cell">
                       {e.employeeName || '—'}
                     </td>
-                    <td className="py-3 px-4 text-slate-600 whitespace-nowrap">
+                    <td className="py-3 px-4 text-slate-600 whitespace-nowrap hidden md:table-cell">
                       {getMethodName(e.paymentMethodId)}
                     </td>
-                    <td className="py-3 px-4 font-mono text-slate-500 whitespace-nowrap">
+                    <td className="py-3 px-4 font-mono text-slate-500 whitespace-nowrap hidden md:table-cell">
                       {e.referenceNumber || '—'}
                     </td>
                     <td className="py-3 px-4 text-right font-mono font-bold tabular-nums whitespace-nowrap text-rose-700 text-sm">

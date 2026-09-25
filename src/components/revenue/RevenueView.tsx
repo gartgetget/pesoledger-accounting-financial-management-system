@@ -142,7 +142,7 @@ export const RevenueView: React.FC<RevenueViewProps> = ({
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <div className="text-right px-4 py-2 bg-emerald-50 rounded-lg border border-emerald-200">
             <span className="text-[10px] uppercase font-bold text-emerald-700 tracking-wider block">Total Filtered Inflow</span>
             <span className="text-base font-bold font-mono text-emerald-800 tabular-nums">
@@ -266,9 +266,9 @@ export const RevenueView: React.FC<RevenueViewProps> = ({
                 <th className="py-3 px-4">Invoice #</th>
                 <th className="py-3 px-4">Customer</th>
                 <th className="py-3 px-4">Category</th>
-                <th className="py-3 px-4">Service Description</th>
-                <th className="py-3 px-4">Payment Method</th>
-                <th className="py-3 px-4">Technician</th>
+                <th className="py-3 px-4 hidden md:table-cell">Service Description</th>
+                <th className="py-3 px-4 hidden md:table-cell">Payment Method</th>
+                <th className="py-3 px-4 hidden md:table-cell">Technician</th>
                 <th className="py-3 px-4 text-right">Amount (₱)</th>
                 <th className="py-3 px-4 text-center">Actions</th>
               </tr>
@@ -300,7 +300,7 @@ export const RevenueView: React.FC<RevenueViewProps> = ({
                     <td className="py-3 px-4 whitespace-nowrap">
                       <span className="font-semibold text-slate-700">{tx.category}</span>
                     </td>
-                    <td className="py-3 px-4 text-slate-700 truncate max-w-[220px]" title={tx.description}>
+                    <td className="py-3 px-4 text-slate-700 truncate max-w-[220px] hidden md:table-cell" title={tx.description}>
                       {tx.description}
                       {tx.discount > 0 && (
                         <span className="text-[10px] text-slate-400 ml-1">
@@ -308,10 +308,10 @@ export const RevenueView: React.FC<RevenueViewProps> = ({
                         </span>
                       )}
                     </td>
-                    <td className="py-3 px-4 whitespace-nowrap text-slate-600">
+                    <td className="py-3 px-4 whitespace-nowrap text-slate-600 hidden md:table-cell">
                       {getMethodName(tx.paymentMethodId)}
                     </td>
-                    <td className="py-3 px-4 whitespace-nowrap text-slate-600">
+                    <td className="py-3 px-4 whitespace-nowrap text-slate-600 hidden md:table-cell">
                       {tx.employeeName || '—'}
                     </td>
                     <td className="py-3 px-4 text-right font-mono font-bold tabular-nums whitespace-nowrap text-emerald-700 text-sm">

@@ -155,7 +155,7 @@ export const DashboardView: React.FC<{
         </div>
 
         {/* Quick Summary Highlights Pill */}
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <div className="px-3.5 py-2 bg-slate-50 rounded-lg border border-slate-200">
             <span className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold block">Period Inflow</span>
             <span className="text-sm font-bold text-emerald-700 font-mono tabular-nums">
@@ -439,7 +439,7 @@ export const DashboardView: React.FC<{
             <p className="text-xs text-slate-500">Real-time synchronized transactions across all modules</p>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {/* Filter buttons */}
             <div className="flex items-center bg-slate-100 p-0.5 rounded-lg text-xs">
               <button
@@ -487,10 +487,10 @@ export const DashboardView: React.FC<{
               <tr>
                 <th className="py-2.5 px-4">Date</th>
                 <th className="py-2.5 px-4">Type</th>
-                <th className="py-2.5 px-4">Category</th>
+                <th className="py-2.5 px-4 hidden md:table-cell">Category</th>
                 <th className="py-2.5 px-4">Particulars / Description</th>
-                <th className="py-2.5 px-4">Party / Responsible</th>
-                <th className="py-2.5 px-4">Payment Method</th>
+                <th className="py-2.5 px-4 hidden md:table-cell">Party / Responsible</th>
+                <th className="py-2.5 px-4 hidden md:table-cell">Payment Method</th>
                 <th className="py-2.5 px-4 text-right">Amount</th>
               </tr>
             </thead>
@@ -525,16 +525,16 @@ export const DashboardView: React.FC<{
                         </span>
                       )}
                     </td>
-                    <td className="py-2.5 px-4 whitespace-nowrap">
+                    <td className="py-2.5 px-4 whitespace-nowrap hidden md:table-cell">
                       <span className="font-medium text-slate-700">{tx.category}</span>
                     </td>
                     <td className="py-2.5 px-4 text-slate-800 max-w-xs truncate" title={tx.description}>
                       {tx.description}
                     </td>
-                    <td className="py-2.5 px-4 text-slate-600 truncate max-w-[160px]">
+                    <td className="py-2.5 px-4 text-slate-600 truncate max-w-[160px] hidden md:table-cell">
                       {tx.customerOrVendor}
                     </td>
-                    <td className="py-2.5 px-4 text-slate-600 whitespace-nowrap">
+                    <td className="py-2.5 px-4 text-slate-600 whitespace-nowrap hidden md:table-cell">
                       {getMethodName(tx.paymentMethodId)}
                     </td>
                     <td
@@ -551,7 +551,7 @@ export const DashboardView: React.FC<{
           </table>
         </div>
 
-        <div className="p-3 bg-slate-50 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+        <div className="p-3 bg-slate-50 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
           <span>Showing latest {recentTransactions.length} transaction entries</span>
           <div className="flex items-center gap-3">
             <button

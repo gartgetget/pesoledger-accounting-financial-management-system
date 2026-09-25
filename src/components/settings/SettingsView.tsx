@@ -146,7 +146,7 @@ export const SettingsView: React.FC = () => {
         </div>
 
         {/* Role toggle badge */}
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <span className="text-xs text-slate-600">Simulate Role:</span>
           <div className="flex items-center bg-slate-100 p-0.5 rounded-lg text-xs font-semibold">
             <button

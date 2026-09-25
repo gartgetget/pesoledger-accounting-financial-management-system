@@ -30,8 +30,8 @@ export const RevenueExpensesBarChart: React.FC<RevenueExpensesBarChartProps> = (
 
   return (
     <div className="w-full">
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-4 text-xs">
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+        <div className="flex flex-wrap items-center gap-4 text-xs">
           <div className="flex items-center gap-1.5">
             <span className="w-3 h-3 rounded-xs bg-emerald-600"></span>
             <span className="text-slate-600 font-medium">Revenue</span>
@@ -122,9 +122,9 @@ export const CategoryHorizontalBars: React.FC<CategoryHorizontalBarProps> = ({
         const percentage = total > 0 ? ((amount / total) * 100).toFixed(1) : '0';
         return (
           <div key={category} className="space-y-1">
-            <div className="flex items-center justify-between text-xs">
-              <span className="font-semibold text-slate-700 truncate max-w-[180px]">{category}</span>
-              <span className="font-mono text-slate-900 font-medium tabular-nums">
+            <div className="flex items-center justify-between gap-2 text-xs">
+              <span className="font-semibold text-slate-700 truncate min-w-0 max-w-[180px]">{category}</span>
+              <span className="font-mono text-slate-900 font-medium tabular-nums shrink-0">
                 {formatPHP(amount)} <span className="text-slate-400 font-normal">({percentage}%)</span>
               </span>
             </div>
@@ -165,17 +165,17 @@ export const PaymentMethodDistribution: React.FC<PaymentMethodDistributionProps>
         .map((b) => (
           <div
             key={b.methodId}
-            className="flex items-center justify-between p-2.5 rounded-lg border border-slate-100 hover:border-slate-200 bg-slate-50/50 transition-colors"
+            className="flex items-center justify-between gap-3 p-2.5 rounded-lg border border-slate-100 hover:border-slate-200 bg-slate-50/50 transition-colors"
           >
-            <div>
-              <p className="text-xs font-bold text-slate-800">{b.methodName}</p>
-              <div className="flex items-center gap-2 text-[11px] text-slate-500 mt-0.5">
-                <span>In: <strong className="text-emerald-600 font-mono tabular-nums">{formatPHP(b.revenue)}</strong></span>
-                <span>·</span>
-                <span>Out: <strong className="text-rose-600 font-mono tabular-nums">{formatPHP(b.expenses)}</strong></span>
+              <div className="min-w-0">
+                <p className="text-xs font-bold text-slate-800 truncate">{b.methodName}</p>
+                <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500 mt-0.5">
+                  <span>In: <strong className="text-emerald-600 font-mono tabular-nums">{formatPHP(b.revenue)}</strong></span>
+                  <span>·</span>
+                  <span>Out: <strong className="text-rose-600 font-mono tabular-nums">{formatPHP(b.expenses)}</strong></span>
+                </div>
               </div>
-            </div>
-            <div className="text-right">
+              <div className="text-right shrink-0">
               <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Net Inflow</span>
               <span className={`text-xs font-bold font-mono tabular-nums ${b.balance >= 0 ? 'text-slate-900' : 'text-rose-600'}`}>
                 {formatPHP(b.balance)}

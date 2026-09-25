@@ -96,7 +96,7 @@ export const MonthlyAccountingView: React.FC = () => {
         </div>
 
         {/* Year and Month Pickers */}
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <select
             value={selectedMonth}
             onChange={(e) => setSelectedMonth(parseInt(e.target.value))}

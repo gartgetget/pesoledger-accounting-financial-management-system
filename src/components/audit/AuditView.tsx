@@ -47,7 +47,7 @@ export const AuditView: React.FC = () => {
                 <th className="py-2.5 px-4">Timestamp</th>
                 <th className="py-2.5 px-4">Operator</th>
                 <th className="py-2.5 px-4">Action</th>
-                <th className="py-2.5 px-4">Module</th>
+                <th className="py-2.5 px-4 hidden md:table-cell">Module</th>
                 <th className="py-2.5 px-4">Activity Description</th>
               </tr>
             </thead>
@@ -84,7 +84,7 @@ export const AuditView: React.FC = () => {
                         {log.action}
                       </span>
                     </td>
-                    <td className="py-2 px-4 font-sans text-slate-700">{log.module}</td>
+                    <td className="py-2 px-4 font-sans text-slate-700 hidden md:table-cell">{log.module}</td>
                     <td className="py-2 px-4 font-sans text-slate-600 truncate max-w-md" title={log.details}>
                       {log.details}
                     </td>

@@ -92,7 +92,7 @@ export const JobsView: React.FC<JobsViewProps> = ({ onOpenJobModal, onEditJob })
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <div className="text-right px-4 py-2 bg-emerald-50 rounded-lg border border-emerald-200">
             <span className="text-[10px] uppercase font-bold text-emerald-700 tracking-wider block">Total Paid Collections</span>
             <span className="text-base font-bold font-mono text-emerald-800 tabular-nums">
@@ -167,10 +167,10 @@ export const JobsView: React.FC<JobsViewProps> = ({ onOpenJobModal, onEditJob })
                 <th className="py-3 px-4">Date</th>
                 <th className="py-3 px-4">Customer</th>
                 <th className="py-3 px-4">Category</th>
-                <th className="py-3 px-4">Technician Assigned</th>
-                <th className="py-3 px-4">Diagnosis / Details</th>
+                <th className="py-3 px-4 hidden md:table-cell">Technician Assigned</th>
+                <th className="py-3 px-4 hidden md:table-cell">Diagnosis / Details</th>
                 <th className="py-3 px-4 text-center">Job Status</th>
-                <th className="py-3 px-4 text-center">Payment</th>
+                <th className="py-3 px-4 text-center hidden md:table-cell">Payment</th>
                 <th className="py-3 px-4 text-right">Total Billed</th>
                 <th className="py-3 px-4 text-center">Actions</th>
               </tr>
@@ -197,10 +197,10 @@ export const JobsView: React.FC<JobsViewProps> = ({ onOpenJobModal, onEditJob })
                     <td className="py-3 px-4 whitespace-nowrap text-slate-700">
                       {job.serviceCategory}
                     </td>
-                    <td className="py-3 px-4 whitespace-nowrap text-slate-700">
+                    <td className="py-3 px-4 whitespace-nowrap text-slate-700 hidden md:table-cell">
                       {job.technicianName}
                     </td>
-                    <td className="py-3 px-4 text-slate-600 max-w-xs truncate" title={job.description}>
+                    <td className="py-3 px-4 text-slate-600 max-w-xs truncate hidden md:table-cell" title={job.description}>
                       {job.description}
                     </td>
                     <td className="py-3 px-4 text-center whitespace-nowrap">
@@ -225,7 +225,7 @@ export const JobsView: React.FC<JobsViewProps> = ({ onOpenJobModal, onEditJob })
                         </span>
                       )}
                     </td>
-                    <td className="py-3 px-4 text-center whitespace-nowrap">
+                    <td className="py-3 px-4 text-center whitespace-nowrap hidden md:table-cell">
                       {job.paymentStatus === 'Paid' && (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
                           <CheckCircle2 className="w-3 h-3" />

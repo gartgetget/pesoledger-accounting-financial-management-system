@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { ArrowRight, LockKeyhole, UserPlus, Building2, Loader2 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { useToast } from '../layout/ToastProvider';
 
 export const LoginView: React.FC = () => {
   const { login: authLogin, register: authRegister, workspaces, activeWorkspaceId, selectWorkspace, isAuthenticated, isLoading } = useAuth();
+  const toast = useToast();
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
@@ -17,6 +19,7 @@ export const LoginView: React.FC = () => {
     setError('');
     try {
       await authLogin(userEmail.trim(), userPassword);
+      toast.success('Signed in successfully. Welcome back!');
     } catch (loginError) {
       setError(loginError instanceof Error ? loginError.message : 'Unable to sign in with the server.');
     } finally {
@@ -29,6 +32,7 @@ export const LoginView: React.FC = () => {
     setError('');
     try {
       await authRegister(name.trim(), userEmail.trim(), userPassword, userWorkspaceName.trim());
+      toast.success('Account created and signed in successfully!');
     } catch (registerError) {
       setError(registerError instanceof Error ? registerError.message : 'Unable to create the account.');
     } finally {

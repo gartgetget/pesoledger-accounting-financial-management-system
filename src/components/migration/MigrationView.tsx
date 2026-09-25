@@ -330,6 +330,7 @@ export const MigrationView: React.FC = () => {
                   Showing {Math.min(5, inspectionResult.detectedRevenue.length)} of {inspectionResult.detectedRevenue.length}
                 </span>
               </div>
+              <div className="overflow-x-auto">
               <table className="w-full text-left text-xs font-mono">
                 <thead className="bg-slate-100 text-slate-600 text-[10px] uppercase">
                   <tr>
@@ -352,6 +353,7 @@ export const MigrationView: React.FC = () => {
                   ))}
                 </tbody>
               </table>
+              </div>
             </div>
           )}
 
@@ -364,6 +366,7 @@ export const MigrationView: React.FC = () => {
                   Showing {Math.min(5, inspectionResult.detectedExpenses.length)} of {inspectionResult.detectedExpenses.length}
                 </span>
               </div>
+              <div className="overflow-x-auto">
               <table className="w-full text-left text-xs font-mono">
                 <thead className="bg-slate-100 text-slate-600 text-[10px] uppercase">
                   <tr>
@@ -384,6 +387,7 @@ export const MigrationView: React.FC = () => {
                   ))}
                 </tbody>
               </table>
+              </div>
             </div>
           )}
         </div>
