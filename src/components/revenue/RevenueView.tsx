@@ -317,6 +317,14 @@ export const RevenueView: React.FC<RevenueViewProps> = ({
                     </td>
                     <td className="py-3 px-4 whitespace-nowrap font-mono font-semibold text-slate-900">
                       {tx.invoiceNumber}
+                      {tx.relatedId && (
+                        <span
+                          className="ml-1.5 inline-block px-1.5 py-0.5 text-[9px] font-sans font-bold uppercase rounded bg-indigo-100 text-indigo-700 align-middle"
+                          title="Auto-created from a job order"
+                        >
+                          JOB
+                        </span>
+                      )}
                     </td>
                     <td className="py-3 px-4 text-slate-800 font-medium truncate max-w-[180px]" title={tx.customerName}>
                       {tx.customerName}

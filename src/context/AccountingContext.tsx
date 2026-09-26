@@ -124,6 +124,7 @@ function mapBackendRevenue(entry: any): RevenueTransaction {
     paymentMethodId: entry.paymentMethod || 'Cash',
     employeeId: entry.createdBy, employeeName: '',
     notes: '', serviceJobId: undefined,
+    relatedId: entry.relatedId,
     isVoid: false, voidReason: '',
     createdAt: entry.createdAt || new Date().toISOString(),
     area: entry.area || '',
@@ -439,7 +440,10 @@ export const AccountingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       addAudit('VOID', 'Revenue', `Deleted revenue transaction ${id}`);
       toast.success('Collection deleted');
       await refetchAllData();
-    } catch (e) { console.error(e); toast.error('Failed to delete collection'); }
+    } catch (e) {
+      console.error(e);
+      toast.error(e instanceof Error ? e.message : 'Failed to delete collection');
+    }
   };
 
   const addExpense = async (data: Omit<Expense, 'id' | 'createdAt'>): Promise<string> => {

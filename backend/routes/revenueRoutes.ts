@@ -1,5 +1,6 @@
 import { createRouter } from "../middleware/createRouter.js";
 import RevenueEntry from "../models/RevenueEntry.js";
+import JobOrder from "../models/JobOrder.js";
 import auth from "../middleware/auth.js";
 
 const router = createRouter();
@@ -86,10 +87,17 @@ router.delete("/:workspaceId/revenue/:id", ensureWorkspaceAccess, async (req, re
   if (!entry) return res.status(404).json({ message: "Revenue entry not found" });
 
   if (entry.relatedId) {
-    return res.status(400).json({
-      message:
-        "This collection is linked to a job order — edit the job order instead (set Amount Paid to 0 to remove it).",
-    });
+    const job = await JobOrder.findOne({ _id: entry.relatedId, workspaceId });
+    if (job) {
+      job.amountPaid = 0;
+      job.paymentStatus = "Unpaid";
+      job.revenueId = "";
+      job.customers = (job.customers || []).map((c: any) => ({ ...c, amountCollected: 0 }));
+      job.updatedAt = new Date();
+      await job.save();
+    }
+    await entry.deleteOne();
+    return res.json({ message: "Collection deleted; linked job order marked unpaid" });
   }
 
   await entry.deleteOne();

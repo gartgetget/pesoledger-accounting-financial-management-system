@@ -178,6 +178,7 @@ export interface RevenueTransaction {
   employeeName?: string;
   notes?: string;
   serviceJobId?: string;
+  relatedId?: string;
   area?: string;
   isVoid?: boolean;
   voidReason?: string;
