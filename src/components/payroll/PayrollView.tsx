@@ -5,6 +5,7 @@ import {
   PhilippinePeso,
   UserPlus,
   Trash2,
+  Edit2,
   Calendar,
   FileSpreadsheet,
 } from 'lucide-react';
@@ -13,25 +14,33 @@ import { formatPHP } from '../../utils/currency';
 import { formatDateDisplay } from '../../utils/date';
 import { exportToExcel } from '../../utils/excel';
 import { PayrollModal } from './PayrollModal';
+import { ConfirmModal } from '../layout/ConfirmModal';
+import { PayrollRecord } from '../../types';
 
 export const PayrollView: React.FC = () => {
   const {
     employees,
     payrollRecords,
     paymentMethods,
+    areas,
     addEmployee,
     deleteEmployee,
+    updateEmployee,
+    deletePayroll,
     userRole,
   } = useAccounting();
 
   const [isPayrollModalOpen, setIsPayrollModalOpen] = useState(false);
   const [showAddEmpModal, setShowAddEmpModal] = useState(false);
+  const [editingRecord, setEditingRecord] = useState<PayrollRecord | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<PayrollRecord | null>(null);
 
   // New employee state
   const [newEmpName, setNewEmpName] = useState('');
   const [newEmpRole, setNewEmpRole] = useState('Technician');
   const [newEmpRate, setNewEmpRate] = useState('650');
   const [newEmpContact, setNewEmpContact] = useState('');
+  const [newEmpArea, setNewEmpArea] = useState('');
 
   const handleCreateEmployee = (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,10 +51,12 @@ export const PayrollView: React.FC = () => {
       position: newEmpRole,
       dailyRate: parseFloat(newEmpRate) || 0,
       contact: newEmpContact.trim(),
+      area: newEmpArea,
     });
 
     setNewEmpName('');
     setNewEmpContact('');
+    setNewEmpArea('');
     setShowAddEmpModal(false);
   };
 
@@ -61,9 +72,11 @@ export const PayrollView: React.FC = () => {
       'Date': r.date,
       'Period': r.period,
       'Employee': r.employeeName,
+      'Days Worked': r.daysWorked || '',
       'Basic Salary': r.basicSalary,
       'Overtime': r.overtimePay,
       'Incentives': r.incentives,
+      'Coop': r.coop ?? '',
       'Food Allowance': r.foodAllowance,
       'Deductions': r.deductions,
       'Gross Salary': r.grossSalary,
@@ -100,7 +113,10 @@ export const PayrollView: React.FC = () => {
           </button>
 
           <button
-            onClick={() => setIsPayrollModalOpen(true)}
+            onClick={() => {
+              setEditingRecord(null);
+              setIsPayrollModalOpen(true);
+            }}
             className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold shadow-xs cursor-pointer"
           >
             <PhilippinePeso className="w-4 h-4" />
@@ -138,6 +154,26 @@ export const PayrollView: React.FC = () => {
                 <span className="inline-block mt-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-indigo-100 text-indigo-800">
                   {emp.position}
                 </span>
+                {emp.area && (
+                  <span className="inline-block mt-1 ml-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-100 text-emerald-800">
+                    {emp.area}
+                  </span>
+                )}
+                {userRole === 'admin' && areas.length > 0 && (
+                  <select
+                    value={emp.area || ''}
+                    onChange={(e) => updateEmployee(emp.id, { area: e.target.value })}
+                    className="mt-2 w-full text-[11px] px-2 py-1 border border-slate-200 rounded bg-white cursor-pointer"
+                    title="Assign tech area"
+                  >
+                    <option value="">No area assigned</option>
+                    {areas.map((a) => (
+                      <option key={a.id} value={a.name}>
+                        {a.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
                 <p className="text-xs text-slate-500 mt-2 font-mono">
                   Daily Rate: <strong className="text-slate-800 font-bold">{formatPHP(emp.dailyRate || 0)}</strong>
                 </p>
@@ -174,16 +210,18 @@ export const PayrollView: React.FC = () => {
                 <th className="py-2.5 px-4 hidden md:table-cell">Period</th>
                 <th className="py-2.5 px-4">Employee</th>
                 <th className="py-2.5 px-4 text-right">Base Pay</th>
+                <th className="py-2.5 px-4 text-right hidden md:table-cell">Days</th>
                 <th className="py-2.5 px-4 text-right hidden md:table-cell">OT / Add-ons</th>
                 <th className="py-2.5 px-4 text-right">Deductions</th>
                 <th className="py-2.5 px-4 text-right">Net Take-Home</th>
                 <th className="py-2.5 px-4 hidden md:table-cell">Account Paid</th>
+                <th className="py-2.5 px-4 text-center">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 font-mono">
               {payrollRecords.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-8 text-center text-slate-400 text-xs font-sans">
+                  <td colSpan={10} className="py-8 text-center text-slate-400 text-xs font-sans">
                     No payroll disbursements recorded yet. Click "Process Payroll" to disburse wages.
                   </td>
                 </tr>
@@ -202,8 +240,11 @@ export const PayrollView: React.FC = () => {
                     <td className="py-2.5 px-4 text-right text-slate-700 tabular-nums">
                       {formatPHP(r.basicSalary)}
                     </td>
+                    <td className="py-2.5 px-4 text-right text-slate-500 tabular-nums hidden md:table-cell">
+                      {r.daysWorked ? `${r.daysWorked}` : '—'}
+                    </td>
                     <td className="py-2.5 px-4 text-right text-emerald-700 tabular-nums hidden md:table-cell">
-                      +{formatPHP(r.overtimePay + r.incentives + r.foodAllowance)}
+                      +{formatPHP(r.overtimePay + r.incentives + r.foodAllowance + (r.coop || 0))}
                     </td>
                     <td className="py-2.5 px-4 text-right text-rose-700 tabular-nums">
                       -{formatPHP(r.deductions)}
@@ -214,6 +255,29 @@ export const PayrollView: React.FC = () => {
                     <td className="py-2.5 px-4 font-sans text-slate-600 whitespace-nowrap hidden md:table-cell">
                       {getMethodName(r.paymentMethodId)}
                     </td>
+                    <td className="py-2.5 px-4 text-center whitespace-nowrap">
+                      <div className="flex items-center justify-center gap-2">
+                        <button
+                          onClick={() => {
+                            setEditingRecord(r);
+                            setIsPayrollModalOpen(true);
+                          }}
+                          className="p-1 text-slate-400 hover:text-slate-700 cursor-pointer"
+                          title="Edit payroll voucher"
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
+                        </button>
+                        {userRole === 'admin' && (
+                          <button
+                            onClick={() => setDeleteTarget(r)}
+                            className="p-1 text-slate-400 hover:text-rose-600 cursor-pointer"
+                            title="Delete payroll voucher"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    </td>
                   </tr>
                 ))
               )}
@@ -222,8 +286,30 @@ export const PayrollView: React.FC = () => {
         </div>
       </div>
 
-      {/* PROCESS PAYROLL MODAL */}
-      <PayrollModal isOpen={isPayrollModalOpen} onClose={() => setIsPayrollModalOpen(false)} />
+      {/* PROCESS / EDIT PAYROLL MODAL */}
+      <PayrollModal
+        isOpen={isPayrollModalOpen}
+        onClose={() => {
+          setIsPayrollModalOpen(false);
+          setEditingRecord(null);
+        }}
+        editRecord={editingRecord}
+      />
+
+      <ConfirmModal
+        isOpen={!!deleteTarget}
+        title="Remove Payroll Voucher"
+        message={`Are you sure you want to remove the payroll voucher for ${deleteTarget?.employeeName} (${deleteTarget?.period})? Its auto-posted SALARY entry in the General Ledger will be removed too.`}
+        confirmLabel="Remove Voucher"
+        isDestructive={true}
+        onConfirm={() => {
+          if (deleteTarget) {
+            deletePayroll(deleteTarget.id);
+            setDeleteTarget(null);
+          }
+        }}
+        onCancel={() => setDeleteTarget(null)}
+      />
 
       {/* ADD EMPLOYEE MODAL */}
       {showAddEmpModal && (
@@ -291,6 +377,24 @@ export const PayrollView: React.FC = () => {
                   placeholder="0917-XXX-XXXX"
                   className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg focus:outline-hidden"
                 />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1">
+                  Assigned Tech Area
+                </label>
+                <select
+                  value={newEmpArea}
+                  onChange={(e) => setNewEmpArea(e.target.value)}
+                  className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg bg-white"
+                >
+                  <option value="">No area assigned</option>
+                  {areas.map((a) => (
+                    <option key={a.id} value={a.name}>
+                      {a.name}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">

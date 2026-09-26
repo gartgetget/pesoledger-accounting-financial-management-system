@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useMemo, useCall
 import {
   ActiveTab,
   AccountingAccount,
+  Area,
   AuditLog,
   CategoryItem,
   CompanySettings,
@@ -67,6 +68,7 @@ export interface AccountingContextType {
   employees: Employee[]; payrollRecords: PayrollRecord[]; vehicles: Vehicle[];
   vehicleExpenses: VehicleExpense[]; parts: Part[]; serviceJobs: ServiceJob[];
   serviceCategories: CategoryItem[]; revenueCategories: CategoryItem[]; expenseCategories: CategoryItem[];
+  areas: Area[];
   paymentMethods: PaymentMethodItem[]; companySettings: CompanySettings; auditLogs: AuditLog[];
   financialSummary: FinancialSummary; getSummaryForRange: (range: DateFilterRange) => FinancialSummary;
   getYearlyMatrix: (year: number) => Array<{ monthIndex: number; monthName: string; revenue: number; expenses: number; netIncome: number }>;
@@ -75,12 +77,14 @@ export interface AccountingContextType {
   voidRevenueTransaction: (id: string) => void;
   addExpense: (data: Omit<Expense, 'id' | 'createdAt'>) => Promise<string>;
   updateExpense: (id: string, updates: Partial<Expense>) => void; voidExpense: (id: string) => void;
-  createServiceJob: (job: Omit<ServiceJob, 'id' | 'createdAt'>) => Promise<string>;
+  createServiceJob: (job: Omit<ServiceJob, 'id' | 'createdAt'>) => Promise<string | null>;
   updateServiceJob: (id: string, updates: Partial<ServiceJob>) => void; deleteServiceJob: (id: string) => void;
   addEmployee: (employee: Omit<Employee, 'id'>) => void; updateEmployee: (id: string, updates: Partial<Employee>) => void;
   deleteEmployee: (id: string) => void; processPayroll: (record: Omit<PayrollRecord, 'id' | 'createdAt'>) => void;
+  updatePayroll: (id: string, record: Partial<PayrollRecord>) => void; deletePayroll: (id: string) => void;
   addVehicle: (vehicle: Omit<Vehicle, 'id'>) => void; updateVehicle: (id: string, updates: Partial<Vehicle>) => void;
-  deleteVehicle: (id: string) => void; addVehicleExpense: (vexp: Omit<VehicleExpense, 'id'>) => void;
+  deleteVehicle: (id: string) => void; addVehicleExpense: (vexp: Omit<VehicleExpense, 'id'>) => Promise<boolean>;
+  deleteVehicleExpense: (id: string) => void;
   addPart: (part: Omit<Part, 'id'>) => void; updatePart: (id: string, updates: Partial<Part>) => void;
   deletePart: (id: string) => void; restockPart: (partId: string, quantityToAdd: number, unitCostPrice?: number) => void;
   addCustomer: (customer: Omit<Customer, 'id' | 'createdAt'>) => Promise<string>;
@@ -94,6 +98,9 @@ export interface AccountingContextType {
   addPaymentMethod: (name: string, accountNumber?: string, accountHolder?: string) => void;
   updatePaymentMethod: (id: string, updates: { name?: string; accountNumber?: string; accountHolder?: string }) => void;
   deletePaymentMethod: (id: string) => void; updateCompanySettings: (settings: CompanySettings) => void;
+  addArea: (name: string) => Promise<void>;
+  updateArea: (id: string, name: string) => Promise<void>;
+  deleteArea: (id: string) => Promise<void>;
   batchImportData: (result: ImportInspectionResult) => void; resetToDefaultData: () => void;
   exportDatabaseJSON: () => void; importDatabaseJSON: (jsonString: string) => boolean;
   isApiLoading: boolean;
@@ -119,6 +126,7 @@ function mapBackendRevenue(entry: any): RevenueTransaction {
     notes: '', serviceJobId: undefined,
     isVoid: false, voidReason: '',
     createdAt: entry.createdAt || new Date().toISOString(),
+    area: entry.area || '',
   };
 }
 
@@ -129,9 +137,10 @@ function mapBackendExpense(entry: any): Expense {
     category: entry.category || entry.categoryId || '',
     description: entry.description || '', amount: entry.amount || 0,
     paymentMethodId: entry.paymentMethod || 'Cash',
+    area: entry.area || '',
     vendorSupplier: '', employeeId: entry.createdBy, employeeName: '',
     referenceNumber: entry.referenceNo || '', notes: '',
-    relatedModule: 'general', relatedId: undefined,
+    relatedModule: entry.relatedModule || 'general', relatedId: entry.relatedId,
     isVoid: false, voidReason: '',
     createdAt: entry.createdAt || new Date().toISOString(),
   };
@@ -166,8 +175,52 @@ function mapBackendJob(order: any): ServiceJob {
     amountPaid: Number(order.amountPaid ?? 0), paymentMethodId: order.paymentMethodId || '',
     paymentStatus: (order.paymentStatus as ServiceJob['paymentStatus']) || 'Unpaid',
     status: (order.status as ServiceJob['status']) || 'open',
-    notes: order.notes || '', revenueId: undefined, expenseId: undefined,
+    notes: order.notes || '', revenueId: order.revenueId || undefined, expenseId: order.expenseId || undefined,
+    area: order.area || '',
+    customers: Array.isArray(order.customers)
+      ? order.customers.map((c: any) => ({ customerId: c.customerId || '', name: c.name || '', amountCollected: Number(c.amountCollected || 0) }))
+      : [],
     createdAt: order.createdAt || new Date().toISOString(),
+  };
+}
+
+function mapBackendVehicleExpense(entry: any): VehicleExpense {
+  return {
+    id: entry._id || entry.id,
+    vehicleId: entry.vehicleId,
+    vehicleName: entry.vehicleName || '',
+    date: entry.date ? String(entry.date).split('T')[0] : '',
+    expenseType: entry.expenseType,
+    amount: Number(entry.amount || 0),
+    paymentMethodId: entry.paymentMethodId || 'Cash',
+    area: entry.area || '',
+    driverResponsible: entry.driverResponsible || '',
+    odometer: Number(entry.odometer || 0),
+    description: entry.description || '',
+    notes: entry.notes || '',
+    expenseId: entry.expenseId || undefined,
+  };
+}
+
+function mapBackendPayroll(entry: any): PayrollRecord {
+  return {
+    ...entry,
+    id: entry._id || entry.id,
+    date: entry.date ? String(entry.date).split('T')[0] : '',
+    employeeId: entry.employeeId || '',
+    daysWorked: Number(entry.daysWorked || 0),
+    dailyRate: Number(entry.dailyRate || 0),
+    foodRate: Number(entry.foodRate || 0),
+    coop: Number(entry.coop || 0),
+    basicSalary: Number(entry.basicSalary || 0),
+    overtimePay: Number(entry.overtimePay || 0),
+    incentives: Number(entry.incentives || 0),
+    foodAllowance: Number(entry.foodAllowance || 0),
+    deductions: Number(entry.deductions || 0),
+    grossSalary: Number(entry.grossSalary ?? entry.grossPay ?? 0),
+    netSalary: Number(entry.netSalary ?? entry.netPay ?? 0),
+    paymentMethodId: entry.paymentMethodId || '',
+    createdAt: entry.createdAt || new Date().toISOString(),
   };
 }
 
@@ -196,6 +249,7 @@ export const AccountingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const [revenueCategories, setRevenueCategories] = useState<CategoryItem[]>([]);
   const [expenseCategories, setExpenseCategories] = useState<CategoryItem[]>([]);
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethodItem[]>([]);
+  const [areas, setAreas] = useState<Area[]>([]);
   const [companySettings, setCompanySettings] = useState<CompanySettings>(emptyCompanySettings);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
 
@@ -217,7 +271,7 @@ export const AccountingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       setIsLoadingData(true);
       try {
         const wsId = activeWorkspaceId;
-        const [revData, expData, custData, jobData, catData, invData, payData, vehData, empData, pmData] = await Promise.all([
+        const [revData, expData, custData, jobData, catData, invData, payData, vehData, vexpData, empData, pmData, areaData] = await Promise.all([
           api.get<any[]>(`/api/${wsId}/revenue`).catch(() => []),
           api.get<any[]>(`/api/${wsId}/expenses`).catch(() => []),
           api.get<any[]>(`/api/${wsId}/customers`).catch(() => []),
@@ -226,8 +280,10 @@ export const AccountingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
           api.get<any[]>(`/api/${wsId}/inventory`).catch(() => []),
           api.get<any[]>(`/api/${wsId}/payroll`).catch(() => []),
           api.get<any[]>(`/api/${wsId}/vehicles`).catch(() => []),
+          api.get<any[]>(`/api/${wsId}/vehicle-expenses`).catch(() => []),
           api.get<any[]>(`/api/${wsId}/employees`).catch(() => []),
           api.get<any[]>(`/api/${wsId}/payment-methods`).catch(() => []),
+          api.get<any[]>(`/api/${wsId}/areas`).catch(() => []),
         ]);
         setRevenueTransactions(revData.map(mapBackendRevenue));
         setExpenses(expData.map(mapBackendExpense));
@@ -237,11 +293,12 @@ export const AccountingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         setRevenueCategories(catData.filter((c: any) => c.type === 'revenue').map((c: any) => ({ id: c._id, name: c.name, description: c.description, isDefault: false })));
         setExpenseCategories(catData.filter((c: any) => c.type === 'expense').map((c: any) => ({ id: c._id, name: c.name, description: c.description, isDefault: false })));
         setParts(invData.map((p: any) => ({ id: p._id, partNumber: p.sku, name: p.partName, category: p.category || '', description: '', supplier: '', standardPrice: p.unitPrice, costPrice: p.unitPrice, sellingPrice: p.unitPrice, quantity: p.stock, minimumStock: p.reorderLevel, dateAdded: p.createdAt })));
-        setPayrollRecords(payData.map((p: any) => ({ ...p, id: p._id })));
+        setPayrollRecords(payData.map(mapBackendPayroll));
         setVehicles(vehData.map((v: any) => ({ ...v, id: v._id })));
-        setVehicleExpenses([]);
+        setVehicleExpenses(vexpData.map(mapBackendVehicleExpense));
         setEmployees(empData.map((e: any) => ({ ...e, id: e._id })));
         setPaymentMethods(pmData.map((p: any) => ({ ...p, id: p._id })));
+        setAreas(areaData.map((a: any) => ({ id: a._id, name: a.name })));
       } catch (e) {
         console.error('Failed to fetch workspace data', e);
       } finally {
@@ -255,7 +312,7 @@ export const AccountingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     if (!activeWorkspaceId || !authIsAuthenticated) return;
     try {
       const wsId = activeWorkspaceId;
-      const [revData, expData, custData, jobData, catData, invData, payData, vehData, empData, pmData] = await Promise.all([
+      const [revData, expData, custData, jobData, catData, invData, payData, vehData, vexpData, empData, pmData, areaData] = await Promise.all([
         api.get<any[]>(`/api/${wsId}/revenue`).catch(() => []),
         api.get<any[]>(`/api/${wsId}/expenses`).catch(() => []),
         api.get<any[]>(`/api/${wsId}/customers`).catch(() => []),
@@ -264,8 +321,10 @@ export const AccountingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         api.get<any[]>(`/api/${wsId}/inventory`).catch(() => []),
         api.get<any[]>(`/api/${wsId}/payroll`).catch(() => []),
         api.get<any[]>(`/api/${wsId}/vehicles`).catch(() => []),
+        api.get<any[]>(`/api/${wsId}/vehicle-expenses`).catch(() => []),
         api.get<any[]>(`/api/${wsId}/employees`).catch(() => []),
         api.get<any[]>(`/api/${wsId}/payment-methods`).catch(() => []),
+        api.get<any[]>(`/api/${wsId}/areas`).catch(() => []),
       ]);
       setRevenueTransactions(revData.map(mapBackendRevenue));
       setExpenses(expData.map(mapBackendExpense));
@@ -275,11 +334,12 @@ export const AccountingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       setRevenueCategories(catData.filter((c: any) => c.type === 'revenue').map((c: any) => ({ id: c._id, name: c.name, description: c.description, isDefault: false })));
       setExpenseCategories(catData.filter((c: any) => c.type === 'expense').map((c: any) => ({ id: c._id, name: c.name, description: c.description, isDefault: false })));
       setParts(invData.map((p: any) => ({ id: p._id, partNumber: p.sku, name: p.partName, category: p.category || '', description: '', supplier: '', standardPrice: p.unitPrice, costPrice: p.unitPrice, sellingPrice: p.unitPrice, quantity: p.stock, minimumStock: p.reorderLevel, dateAdded: p.createdAt })));
-      setPayrollRecords(payData.map((p: any) => ({ ...p, id: p._id })));
+      setPayrollRecords(payData.map(mapBackendPayroll));
       setVehicles(vehData.map((v: any) => ({ ...v, id: v._id })));
-      setVehicleExpenses([]);
+      setVehicleExpenses(vexpData.map(mapBackendVehicleExpense));
       setEmployees(empData.map((e: any) => ({ ...e, id: e._id })));
       setPaymentMethods(pmData.map((p: any) => ({ ...p, id: p._id })));
+      setAreas(areaData.map((a: any) => ({ id: a._id, name: a.name })));
     } catch (e) {
       console.error('Failed to refetch workspace data', e);
     }
@@ -420,6 +480,8 @@ export const AccountingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         jobNumber: jobData.jobNumber,
         assignedTechnician: jobData.technicianId,
         technicianName: jobData.technicianName,
+        area: jobData.area || '',
+        customers: jobData.customers || [],
         description: jobData.description,
         laborCost: jobData.laborAmount,
         laborAmount: jobData.laborAmount,
@@ -443,7 +505,11 @@ export const AccountingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       addAudit('CREATE', 'Jobs', `Created service job ${jobData.jobNumber}`);
       await refetchAllData();
       return result._id || `job-${Date.now()}`;
-    } catch (e) { console.error(e); return `job-${Date.now()}`; }
+    } catch (e) {
+      console.error(e);
+      toast.error(e instanceof Error ? e.message : 'Failed to create job order');
+      return null;
+    }
   };
 
   const updateServiceJob = async (id: string, updates: Partial<ServiceJob>) => {
@@ -470,7 +536,7 @@ export const AccountingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
   const addEmployee = async (emp: Omit<Employee, 'id'>) => {
     try {
-      await api.post(`/api/${activeWorkspaceId}/employees`, { name: emp.name, position: emp.position, dailyRate: emp.dailyRate, monthlySalary: emp.monthlySalary, basicSalary: emp.basicSalary, status: emp.status, dateStarted: emp.dateStarted, phone: emp.phone });
+      await api.post(`/api/${activeWorkspaceId}/employees`, { name: emp.name, position: emp.position, dailyRate: emp.dailyRate, monthlySalary: emp.monthlySalary, basicSalary: emp.basicSalary, status: emp.status, dateStarted: emp.dateStarted, phone: emp.phone, area: emp.area });
       addAudit('CREATE', 'Employees', `Added employee ${emp.name}`);
       await refetchAllData();
     } catch (e) { console.error(e); }
@@ -496,10 +562,74 @@ export const AccountingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
   const processPayroll = async (record: Omit<PayrollRecord, 'id' | 'createdAt'>) => {
     try {
-      await api.post(`/api/${activeWorkspaceId}/payroll`, { employeeName: record.employeeName, period: record.period, grossPay: record.grossSalary, deductions: record.deductions, netPay: record.netSalary });
+      await api.post(`/api/${activeWorkspaceId}/payroll`, {
+        employeeId: record.employeeId,
+        employeeName: record.employeeName,
+        date: record.date,
+        period: record.period,
+        daysWorked: record.daysWorked,
+        dailyRate: record.dailyRate,
+        foodRate: record.foodRate,
+        basicSalary: record.basicSalary,
+        overtimePay: record.overtimePay,
+        incentives: record.incentives,
+        coop: record.coop,
+        foodAllowance: record.foodAllowance,
+        deductions: record.deductions,
+        grossSalary: record.grossSalary,
+        netSalary: record.netSalary,
+        paymentMethodId: record.paymentMethodId,
+        notes: record.notes || '',
+      });
       addAudit('CREATE', 'Payroll', `Processed payroll for ${record.employeeName}`);
+      toast.success('Payroll processed and posted to expenses');
       await refetchAllData();
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error(e);
+      toast.error('Failed to process payroll');
+    }
+  };
+
+  const updatePayroll = async (id: string, record: Partial<PayrollRecord>) => {
+    try {
+      await api.put(`/api/${activeWorkspaceId}/payroll/${id}`, {
+        employeeId: record.employeeId,
+        employeeName: record.employeeName,
+        date: record.date,
+        period: record.period,
+        daysWorked: record.daysWorked,
+        dailyRate: record.dailyRate,
+        foodRate: record.foodRate,
+        basicSalary: record.basicSalary,
+        overtimePay: record.overtimePay,
+        incentives: record.incentives,
+        coop: record.coop,
+        foodAllowance: record.foodAllowance,
+        deductions: record.deductions,
+        grossSalary: record.grossSalary,
+        netSalary: record.netSalary,
+        paymentMethodId: record.paymentMethodId,
+        notes: record.notes || '',
+      });
+      addAudit('UPDATE', 'Payroll', `Updated payroll voucher for ${record.employeeName || id}`);
+      toast.success('Payroll voucher updated and ledger re-synced');
+      await refetchAllData();
+    } catch (e) {
+      console.error(e);
+      toast.error('Failed to update payroll voucher');
+    }
+  };
+
+  const deletePayroll = async (id: string) => {
+    try {
+      await api.delete(`/api/${activeWorkspaceId}/payroll/${id}`);
+      addAudit('VOID', 'Payroll', `Deleted payroll voucher ${id}`);
+      toast.success('Payroll voucher deleted');
+      await refetchAllData();
+    } catch (e) {
+      console.error(e);
+      toast.error('Failed to delete payroll voucher');
+    }
   };
 
   const addVehicle = async (veh: Omit<Vehicle, 'id'>) => {
@@ -528,12 +658,30 @@ export const AccountingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     } catch (e) { console.error(e); toast.error('Failed to delete vehicle'); }
   };
 
-  const addVehicleExpense = async (vexp: Omit<VehicleExpense, 'id'>) => {
+  const addVehicleExpense = async (vexp: Omit<VehicleExpense, 'id'>): Promise<boolean> => {
     try {
-      await api.post(`/api/${activeWorkspaceId}/vehicle-expenses`, { vehicleId: vexp.vehicleId, vehicleName: vexp.vehicleName, date: vexp.date, expenseType: vexp.expenseType, amount: vexp.amount, paymentMethodId: vexp.paymentMethodId, driverResponsible: vexp.driverResponsible, odometer: vexp.odometer, description: vexp.description, notes: vexp.notes });
+      await api.post(`/api/${activeWorkspaceId}/vehicle-expenses`, { vehicleId: vexp.vehicleId, vehicleName: vexp.vehicleName, date: vexp.date, expenseType: vexp.expenseType, amount: vexp.amount, paymentMethodId: vexp.paymentMethodId, area: vexp.area || '', driverResponsible: vexp.driverResponsible, odometer: vexp.odometer, description: vexp.description, notes: vexp.notes });
       addAudit('CREATE', 'Vehicles', `Logged vehicle expense ₱${vexp.amount}`);
+      toast.success('Vehicle expense logged and posted to expenses');
       await refetchAllData();
-    } catch (e) { console.error(e); }
+      return true;
+    } catch (e) {
+      console.error(e);
+      toast.error('Failed to log vehicle expense');
+      return false;
+    }
+  };
+
+  const deleteVehicleExpense = async (id: string) => {
+    try {
+      await api.delete(`/api/${activeWorkspaceId}/vehicle-expenses/${id}`);
+      addAudit('VOID', 'Vehicles', `Deleted vehicle expense ${id}`);
+      toast.success('Vehicle expense deleted');
+      await refetchAllData();
+    } catch (e) {
+      console.error(e);
+      toast.error('Failed to delete vehicle expense');
+    }
   };
 
   const addPart = async (part: Omit<Part, 'id'>) => {
@@ -696,6 +844,43 @@ export const AccountingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     } catch (e) { console.error(e); toast.error('Failed to delete payment method'); }
   };
 
+  const addArea = async (name: string) => {
+    try {
+      await api.post(`/api/${activeWorkspaceId}/areas`, { name });
+      addAudit('SETTINGS', 'Areas', `Added area ${name}`);
+      toast.success('Area added');
+      await refetchAllData();
+    } catch (e: any) {
+      console.error(e);
+      toast.error(e?.message || 'Failed to add area');
+    }
+  };
+
+  const updateArea = async (id: string, name: string) => {
+    try {
+      await api.put(`/api/${activeWorkspaceId}/areas/${id}`, { name });
+      addAudit('SETTINGS', 'Areas', `Renamed area to ${name}`);
+      toast.success('Area updated');
+      await refetchAllData();
+    } catch (e: any) {
+      console.error(e);
+      toast.error(e?.message || 'Failed to update area');
+    }
+  };
+
+  const deleteArea = async (id: string) => {
+    try {
+      const area = areas.find((a) => a.id === id);
+      await api.delete(`/api/${activeWorkspaceId}/areas/${id}`);
+      addAudit('VOID', 'Areas', `Deleted area ${area?.name || id}`);
+      toast.success('Area deleted');
+      await refetchAllData();
+    } catch (e: any) {
+      console.error(e);
+      toast.error(e?.message || 'Failed to delete area');
+    }
+  };
+
   const updateCompanySettings = async (settings: CompanySettings) => {
     setCompanySettings(settings);
     addAudit('SETTINGS', 'Company', 'Updated company profile information');
@@ -715,11 +900,11 @@ export const AccountingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     } catch (e) { console.error(e); }
   };
 
-  const resetToDefaultData = () => { setRevenueTransactions([]); setExpenses([]); setCustomers([]); setEmployees([]); setPayrollRecords([]); setVehicles([]); setVehicleExpenses([]); setParts([]); setServiceJobs([]); setServiceCategories([]); setRevenueCategories([]); setExpenseCategories(defaultExpenseCategories); setPaymentMethods([]); setCompanySettings(emptyCompanySettings); setAuditLogs([]); };
+  const resetToDefaultData = () => { setRevenueTransactions([]); setExpenses([]); setCustomers([]); setEmployees([]); setPayrollRecords([]); setVehicles([]); setVehicleExpenses([]); setParts([]); setServiceJobs([]); setServiceCategories([]); setRevenueCategories([]); setExpenseCategories(defaultExpenseCategories); setPaymentMethods([]); setAreas([]); setCompanySettings(emptyCompanySettings); setAuditLogs([]); };
 
   const exportDatabaseJSON = () => { const blob = new Blob([JSON.stringify({ exportDate: new Date().toISOString(), revenueTransactions, expenses, customers, employees, payrollRecords, vehicles, vehicleExpenses, parts, serviceJobs, serviceCategories, revenueCategories, expenseCategories, paymentMethods, companySettings, auditLogs }, null, 2)], { type: 'application/json' }); const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = `chaching-backup-${new Date().toISOString().split('T')[0]}.json`; link.click(); };
 
-  const importDatabaseJSON = (jsonString: string): boolean => { try { const data = JSON.parse(jsonString); if (Array.isArray(data.revenueTransactions)) setRevenueTransactions(data.revenueTransactions); if (Array.isArray(data.expenses)) setExpenses(data.expenses); if (Array.isArray(data.customers)) setCustomers(data.customers); if (Array.isArray(data.employees)) setEmployees(data.employees); if (Array.isArray(data.payrollRecords)) setPayrollRecords(data.payrollRecords); if (Array.isArray(data.vehicles)) setVehicles(data.vehicles); if (Array.isArray(data.parts)) setParts(data.parts); if (Array.isArray(data.serviceJobs)) setServiceJobs(data.serviceJobs); if (Array.isArray(data.serviceCategories)) setServiceCategories(data.serviceCategories); if (Array.isArray(data.revenueCategories)) setRevenueCategories(data.revenueCategories); if (Array.isArray(data.expenseCategories)) setExpenseCategories(data.expenseCategories); if (Array.isArray(data.paymentMethods)) setPaymentMethods(data.paymentMethods); if (data.companySettings) setCompanySettings(data.companySettings); addAudit('SETTINGS', 'Database', 'Restored complete database backup from JSON file.'); return true; } catch (err) { console.error(err); return false; } };
+  const importDatabaseJSON = (jsonString: string): boolean => { try { const data = JSON.parse(jsonString); if (Array.isArray(data.revenueTransactions)) setRevenueTransactions(data.revenueTransactions); if (Array.isArray(data.expenses)) setExpenses(data.expenses); if (Array.isArray(data.customers)) setCustomers(data.customers); if (Array.isArray(data.employees)) setEmployees(data.employees); if (Array.isArray(data.payrollRecords)) setPayrollRecords(data.payrollRecords); if (Array.isArray(data.vehicles)) setVehicles(data.vehicles); if (Array.isArray(data.vehicleExpenses)) setVehicleExpenses(data.vehicleExpenses); if (Array.isArray(data.parts)) setParts(data.parts); if (Array.isArray(data.serviceJobs)) setServiceJobs(data.serviceJobs); if (Array.isArray(data.serviceCategories)) setServiceCategories(data.serviceCategories); if (Array.isArray(data.revenueCategories)) setRevenueCategories(data.revenueCategories); if (Array.isArray(data.expenseCategories)) setExpenseCategories(data.expenseCategories); if (Array.isArray(data.paymentMethods)) setPaymentMethods(data.paymentMethods); if (data.companySettings) setCompanySettings(data.companySettings); addAudit('SETTINGS', 'Database', 'Restored complete database backup from JSON file.'); return true; } catch (err) { console.error(err); return false; } };
 
   return (
     <AccountingContext.Provider value={{
@@ -727,18 +912,20 @@ export const AccountingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       activeTab, setActiveTab, userRole, setUserRole, dateFilterPreset, setDateFilterPreset, dateRange, setCustomDateRange,
       revenueTransactions, expenses, customers, employees, payrollRecords, vehicles, vehicleExpenses, parts, serviceJobs,
       serviceCategories, revenueCategories, expenseCategories, paymentMethods, companySettings, auditLogs,
+      areas,
       financialSummary, getSummaryForRange, getYearlyMatrix,
       addRevenueTransaction, updateRevenueTransaction, voidRevenueTransaction,
       addExpense, updateExpense, voidExpense,
       createServiceJob, updateServiceJob, deleteServiceJob,
-      addEmployee, updateEmployee, deleteEmployee, processPayroll,
-      addVehicle, updateVehicle, deleteVehicle, addVehicleExpense,
+      addEmployee, updateEmployee, deleteEmployee, processPayroll, updatePayroll, deletePayroll,
+      addVehicle, updateVehicle, deleteVehicle, addVehicleExpense, deleteVehicleExpense,
       addPart, updatePart, deletePart, restockPart,
       addCustomer, updateCustomer, deleteCustomer,
       addServiceCategory, updateServiceCategory, deleteServiceCategory,
       addRevenueCategory, updateRevenueCategory, deleteRevenueCategory,
       addExpenseCategory, updateExpenseCategory, deleteExpenseCategory,
       addPaymentMethod, updatePaymentMethod, deletePaymentMethod, updateCompanySettings,
+      addArea, updateArea, deleteArea,
       batchImportData, resetToDefaultData, exportDatabaseJSON, importDatabaseJSON,
       isApiLoading: isLoadingData,
       workspaces, activeWorkspace,

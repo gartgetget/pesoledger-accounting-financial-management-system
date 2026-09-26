@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import dotenv from "dotenv";
+import { runLedgerBackfill } from "./ledgerBackfill.js";
 
 dotenv.config();
 
@@ -39,6 +40,9 @@ async function connectDB(): Promise<void> {
     }
     cached.promise = mongoose.connect(uri).then((m) => {
       cached.conn = m;
+      void runLedgerBackfill().catch((e: any) => {
+        console.error("Ledger backfill failed:", e?.message || e);
+      });
       return m;
     });
     void cached.promise.catch((e: any) => {

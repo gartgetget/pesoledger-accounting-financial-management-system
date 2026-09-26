@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Car,
   Fuel,
@@ -18,9 +18,11 @@ export const VehiclesView: React.FC = () => {
     vehicleExpenses,
     paymentMethods,
     employees,
+    areas,
     addVehicle,
     deleteVehicle,
     addVehicleExpense,
+    deleteVehicleExpense,
     userRole,
   } = useAccounting();
 
@@ -41,6 +43,7 @@ export const VehiclesView: React.FC = () => {
   const [logAmount, setLogAmount] = useState('');
   const [logDriver, setLogDriver] = useState('');
   const [logPaymentId, setLogPaymentId] = useState(paymentMethods[0]?.id || 'pm-1');
+  const [logArea, setLogArea] = useState('');
   const [logNotes, setLogNotes] = useState('');
 
   const handleCreateVehicle = (e: React.FormEvent) => {
@@ -60,7 +63,7 @@ export const VehiclesView: React.FC = () => {
     setShowAddVehicleModal(false);
   };
 
-  const handleLogVehicleExpense = (e: React.FormEvent) => {
+  const handleLogVehicleExpense = async (e: React.FormEvent) => {
     e.preventDefault();
     const amt = parseNumber(logAmount);
     const selectedVeh = vehicles.find((v) => v.id === logVehId);
@@ -69,7 +72,7 @@ export const VehiclesView: React.FC = () => {
       return;
     }
 
-    addVehicleExpense({
+    const saved = await addVehicleExpense({
       vehicleId: selectedVeh.id,
       vehicleName: `${selectedVeh.vehicleName} (${selectedVeh.plateNumber})`,
       date: logDate,
@@ -78,13 +81,34 @@ export const VehiclesView: React.FC = () => {
       amount: amt,
       driverResponsible: logDriver.trim() || selectedVeh.assignedDriver || 'Driver',
       paymentMethodId: logPaymentId,
+      area: logArea,
       notes: logNotes.trim(),
     });
 
+    if (!saved) return;
+
     setLogDesc('');
     setLogAmount('');
+    setLogDate(getTodayDateString());
+    setLogType('Fuel/Gas');
+    setLogDriver('');
+    setLogArea('');
+    setLogNotes('');
+    if (paymentMethods.length > 0) setLogPaymentId(paymentMethods[0].id);
     setShowLogExpenseModal(false);
   };
+
+  useEffect(() => {
+    if (vehicles.length > 0 && (!logVehId || !vehicles.some((v) => v.id === logVehId))) {
+      setLogVehId(vehicles[0].id);
+    }
+  }, [vehicles, logVehId]);
+
+  useEffect(() => {
+    if (paymentMethods.length > 0 && !paymentMethods.some((p) => p.id === logPaymentId)) {
+      setLogPaymentId(paymentMethods[0].id);
+    }
+  }, [paymentMethods, logPaymentId]);
 
   const totalFuel = vehicleExpenses
     .filter((v) => v.expenseType === 'Fuel/Gas')
@@ -102,6 +126,7 @@ export const VehiclesView: React.FC = () => {
       'Particulars': v.description,
       'Amount (PHP)': v.amount,
       'Driver': v.driverResponsible,
+      'Area': v.area || '',
       'Remarks': v.notes || '',
     }));
     exportToExcel([{ sheetName: 'Vehicle Expenses', data: exportData }], `Vehicle_Expenses_${new Date().toISOString().split('T')[0]}`);
@@ -244,14 +269,16 @@ export const VehiclesView: React.FC = () => {
                 <th className="py-2.5 px-4">Expense Type</th>
                 <th className="py-2.5 px-4 hidden md:table-cell">Particulars</th>
                 <th className="py-2.5 px-4">Driver / Person</th>
+                <th className="py-2.5 px-4 hidden md:table-cell">Area</th>
                 <th className="py-2.5 px-4 text-right">Amount (₱)</th>
                 <th className="py-2.5 px-4 hidden md:table-cell">Remarks</th>
+                <th className="py-2.5 px-4 text-center">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {vehicleExpenses.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-8 text-center text-slate-400 text-xs">
+                  <td colSpan={9} className="py-8 text-center text-slate-400 text-xs">
                     No vehicle expenses logged yet.
                   </td>
                 </tr>
@@ -269,10 +296,26 @@ export const VehiclesView: React.FC = () => {
                     </td>
                     <td className="py-2.5 px-4 text-slate-700 truncate max-w-xs hidden md:table-cell">{v.description}</td>
                     <td className="py-2.5 px-4 text-slate-600 whitespace-nowrap">{v.driverResponsible}</td>
+                    <td className="py-2.5 px-4 text-slate-600 whitespace-nowrap hidden md:table-cell">{v.area || '—'}</td>
                     <td className="py-2.5 px-4 text-right font-mono font-bold text-orange-800 tabular-nums whitespace-nowrap text-sm">
                       {formatPHP(v.amount)}
                     </td>
                     <td className="py-2.5 px-4 text-slate-400 text-[11px] truncate max-w-[140px] hidden md:table-cell">{v.notes || '—'}</td>
+                    <td className="py-2.5 px-4 text-center">
+                      {userRole === 'admin' && (
+                        <button
+                          onClick={() => {
+                            if (window.confirm('Delete this vehicle expense? Its General Ledger entry will be removed too.')) {
+                              deleteVehicleExpense(v.id);
+                            }
+                          }}
+                          className="p-1 text-slate-400 hover:text-rose-600 cursor-pointer"
+                          title="Delete vehicle expense"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </td>
                   </tr>
                 ))
               )}
@@ -400,6 +443,24 @@ export const VehiclesView: React.FC = () => {
                   placeholder="e.g. Eugene / Arnel"
                   className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg"
                 />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1">
+                  Area
+                </label>
+                <select
+                  value={logArea}
+                  onChange={(e) => setLogArea(e.target.value)}
+                  className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg bg-white"
+                >
+                  <option value="">No area</option>
+                  {areas.map((a) => (
+                    <option key={a.id} value={a.name}>
+                      {a.name}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">

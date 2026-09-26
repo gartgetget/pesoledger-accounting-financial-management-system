@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   FileBarChart2,
   Printer,
@@ -12,8 +12,13 @@ import {
 } from 'lucide-react';
 import { useAccounting } from '../../context/AccountingContext';
 import { formatPHP } from '../../utils/currency';
-import { formatDateDisplay } from '../../utils/date';
+import { formatDateDisplay, isDateInRange } from '../../utils/date';
 import { exportToExcel, exportToCSV } from '../../utils/excel';
+
+const ROMAN = [
+  'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X',
+  'XI', 'XII', 'XIII', 'XIV', 'XV', 'XVI', 'XVII', 'XVIII', 'XIX', 'XX',
+];
 
 export const ReportsView: React.FC = () => {
   const {
@@ -23,9 +28,98 @@ export const ReportsView: React.FC = () => {
     revenueTransactions,
     expenses,
     paymentMethods,
+    serviceJobs,
+    areas,
   } = useAccounting();
 
-  const [activeReportTab, setActiveReportTab] = useState<'pnl' | 'categories' | 'payment_methods'>('pnl');
+  const [activeReportTab, setActiveReportTab] = useState<'pnl' | 'categories' | 'payment_methods' | 'areas'>('pnl');
+
+  // Area Profitability Matrix (same shared formula as dashboard / daily)
+  const areaReport = useMemo(() => {
+    const revByArea: Record<string, number> = {};
+    revenueTransactions
+      .filter((r) => !r.isVoid && isDateInRange(r.date, dateRange))
+      .forEach((r) => {
+        const key = r.area || 'Unassigned';
+        revByArea[key] = (revByArea[key] || 0) + (r.amount || 0);
+      });
+
+    const costByArea: Record<string, number> = {};
+    serviceJobs
+      .filter((j) => isDateInRange(j.date, dateRange))
+      .forEach((j) => {
+        const key = j.area || 'Unassigned';
+        costByArea[key] = (costByArea[key] || 0) + (j.partsCostAmount || 0);
+      });
+    expenses
+      .filter((e) => !e.isVoid && isDateInRange(e.date, dateRange) && e.relatedModule !== 'salary')
+      .forEach((e) => {
+        const key = e.area || 'Unassigned';
+        costByArea[key] = (costByArea[key] || 0) + (e.amount || 0);
+      });
+
+    const names = Array.from(
+      new Set([...areas.map((a) => a.name), ...Object.keys(revByArea), ...Object.keys(costByArea)])
+    );
+    const rows = names
+      .map((name) => {
+        const revenueList = revenueTransactions
+          .filter((r) => !r.isVoid && isDateInRange(r.date, dateRange) && (r.area || 'Unassigned') === name)
+          .sort((a, b) => a.date.localeCompare(b.date));
+        const jobList = serviceJobs
+          .filter(
+            (j) => isDateInRange(j.date, dateRange) && (j.area || 'Unassigned') === name && (j.partsCostAmount || 0) > 0
+          )
+          .sort((a, b) => a.date.localeCompare(b.date));
+        const expenseList = expenses
+          .filter(
+            (e) =>
+              !e.isVoid &&
+              isDateInRange(e.date, dateRange) &&
+              e.relatedModule !== 'salary' &&
+              (e.area || 'Unassigned') === name
+          )
+          .sort((a, b) => a.date.localeCompare(b.date));
+
+        const costList = [
+          ...jobList.map((j) => ({
+            key: `job-${j.id}`,
+            date: j.date,
+            label: `${j.date} · ${j.jobNumber} · ${j.description || 'Parts cost'}${
+              j.customerName ? ` · ${j.customerName}` : ''
+            }`,
+            amount: j.partsCostAmount || 0,
+          })),
+          ...expenseList.map((e) => ({
+            key: `exp-${e.id}`,
+            date: e.date,
+            label: `${e.date} · ${e.category} · ${e.description}${e.vendorSupplier ? ` · ${e.vendorSupplier}` : ''}`,
+            amount: e.amount || 0,
+          })),
+        ].sort((a, b) => a.date.localeCompare(b.date));
+
+        return {
+          name,
+          collections: revenueList.reduce((s, r) => s + (r.amount || 0), 0),
+          costs: costList.reduce((s, c) => s + c.amount, 0),
+          revenueList,
+          costList,
+        };
+      })
+      .sort((a, b) => b.collections - a.collections || b.costs - a.costs);
+
+    return {
+      rows,
+      totalCollections: rows.reduce((s, r) => s + r.collections, 0),
+      totalCosts: rows.reduce((s, r) => s + r.costs, 0),
+    };
+  }, [revenueTransactions, serviceJobs, expenses, dateRange, areas]);
+
+  const areaTotalNet = areaReport.totalCollections - areaReport.totalCosts;
+  const areaMarginPct =
+    areaReport.totalCollections > 0
+      ? ((areaTotalNet / areaReport.totalCollections) * 100).toFixed(1)
+      : '0';
 
   // P&L CALCULATIONS (Section 15)
   // Revenue
@@ -77,7 +171,25 @@ export const ReportsView: React.FC = () => {
       { 'Account / Line Item': '', 'Amount (PHP)': '' },
       { 'Account / Line Item': 'NET INCOME / NET PROFIT', 'Amount (PHP)': pnlNetIncome },
     ];
-    exportToExcel([{ sheetName: 'Profit and Loss', data: pnlData }], `Profit_Loss_Statement_${dateRange.startDate}_to_${dateRange.endDate}`);
+    const areaData = areaReport.rows.map((r) => ({
+      'Area': r.name,
+      'Collections (PHP)': r.collections,
+      'Costs (PHP)': r.costs,
+      'Net (PHP)': r.collections - r.costs,
+    }));
+    areaData.push({
+      'Area': 'TOTAL',
+      'Collections (PHP)': areaReport.totalCollections,
+      'Costs (PHP)': areaReport.totalCosts,
+      'Net (PHP)': areaReport.totalCollections - areaReport.totalCosts,
+    });
+    exportToExcel(
+      [
+        { sheetName: 'Profit and Loss', data: pnlData },
+        { sheetName: 'By Area', data: areaData },
+      ],
+      `Profit_Loss_Statement_${dateRange.startDate}_to_${dateRange.endDate}`
+    );
   };
 
   return (
@@ -91,7 +203,7 @@ export const ReportsView: React.FC = () => {
           <div>
             <h1 className="text-base font-bold text-slate-900">Financial Reports & Profit & Loss Statement</h1>
             <p className="text-xs text-slate-500">
-              Audited P&L, service category profit margins, and payment inflow analysis
+              Audited P&L, category profit margins, payment inflow, and per-area profitability analysis
             </p>
           </div>
         </div>
@@ -140,6 +252,14 @@ export const ReportsView: React.FC = () => {
           }`}
         >
           Payment Channels & Liquidity
+        </button>
+        <button
+          onClick={() => setActiveReportTab('areas')}
+          className={`px-3 py-1.5 rounded-lg cursor-pointer ${
+            activeReportTab === 'areas' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'
+          }`}
+        >
+          Area Profitability Matrix
         </button>
       </div>
 
@@ -358,6 +478,210 @@ export const ReportsView: React.FC = () => {
               </tbody>
             </table>
           </div>
+        </div>
+      )}
+      {/* REPORT 4: STATEMENT OF PROFIT AND LOSS — SEPARATE STATEMENT PER AREA */}
+      {activeReportTab === 'areas' && (
+        <div className="space-y-6">
+          {areaReport.rows.length === 0 ? (
+            <div className="bg-white rounded-xl border border-slate-200 shadow-xs p-6 sm:p-8 max-w-3xl mx-auto">
+              <p className="text-center text-xs text-slate-400 py-8 font-sans">
+                No areas or transactions in this period yet.
+              </p>
+            </div>
+          ) : (
+            <>
+              {areaReport.rows.map((row, idx) => {
+                const net = row.collections - row.costs;
+                const margin = row.collections > 0 ? ((net / row.collections) * 100).toFixed(1) : '0';
+                return (
+                  <div
+                    key={row.name}
+                    className="bg-white rounded-xl border border-slate-200 shadow-xs p-6 sm:p-8 max-w-3xl mx-auto space-y-6 print:break-after-page"
+                  >
+                    {/* Official Company Letterhead Header */}
+                    <div className="text-center border-b border-slate-200 pb-4">
+                      <h2 className="text-base font-bold text-slate-900 tracking-tight uppercase">
+                        {companySettings.name}
+                      </h2>
+                      <p className="text-xs text-slate-500 mt-0.5">{companySettings.address} · TIN: {companySettings.tin}</p>
+                      <h3 className="text-sm font-bold text-slate-800 mt-3 tracking-wider uppercase font-mono">
+                        STATEMENT OF PROFIT AND LOSS
+                      </h3>
+                      <p className="text-xs font-bold text-slate-700 font-mono uppercase mt-1.5">
+                        Area: {row.name}
+                      </p>
+                      <p className="text-xs text-slate-500 font-mono">
+                        For the Period: {formatDateDisplay(dateRange.startDate)} to {formatDateDisplay(dateRange.endDate)}
+                      </p>
+                      <p className="text-[10px] text-slate-400 mt-0.5">(All amounts stated in Philippine Peso ₱)</p>
+                    </div>
+
+                    {/* Statement Body */}
+                    <div className="space-y-5 text-xs font-mono">
+                      <div>
+                        <div className="flex justify-between py-1.5 font-bold text-slate-900 border-b border-slate-300">
+                          <span className="font-sans uppercase">{ROMAN[idx] || idx + 1}. {row.name}</span>
+                          <span></span>
+                        </div>
+                        <div className="divide-y divide-slate-100 pl-4 py-1">
+                          <div className="py-1">
+                            <div className="flex justify-between py-0.5 text-slate-700">
+                              <span>Collections (Revenue)</span>
+                              <span className="tabular-nums">{formatPHP(row.collections)}</span>
+                            </div>
+                            <div className="pl-4 mt-1 space-y-0.5 text-[11px] text-slate-500">
+                              {row.revenueList.length === 0 ? (
+                                <p className="text-slate-400">No revenue entries in this period.</p>
+                              ) : (
+                                row.revenueList.map((r) => (
+                                  <div key={r.id} className="flex justify-between gap-4">
+                                    <span>
+                                      {r.date} · {r.invoiceNumber} · {r.description || r.category}
+                                      {r.customerName ? ` — ${r.customerName}` : ''}
+                                    </span>
+                                    <span className="tabular-nums whitespace-nowrap">{formatPHP(r.amount)}</span>
+                                  </div>
+                                ))
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="py-1">
+                            <div className="flex justify-between py-0.5 text-slate-700">
+                              <span>Costs — Jobs + Tagged Expenses</span>
+                              <span className="tabular-nums text-rose-700">{formatPHP(row.costs)}</span>
+                            </div>
+                            <div className="pl-4 mt-1 space-y-0.5 text-[11px] text-slate-500">
+                              {row.costList.length === 0 ? (
+                                <p className="text-slate-400">No job or tagged expense costs in this period.</p>
+                              ) : (
+                                row.costList.map((c) => (
+                                  <div key={c.key} className="flex justify-between gap-4">
+                                    <span>{c.label}</span>
+                                    <span className="tabular-nums whitespace-nowrap text-rose-600">
+                                      {formatPHP(c.amount)}
+                                    </span>
+                                  </div>
+                                ))
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex justify-between py-1.5 font-bold border-t border-slate-200 bg-slate-50 px-2 text-slate-900">
+                          <span>NET — {row.name}</span>
+                          <span className={`tabular-nums ${net >= 0 ? 'text-emerald-800' : 'text-rose-700'}`}>
+                            {formatPHP(net)}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* NET INCOME BOX FOR THIS AREA */}
+                      <div className="p-4 bg-slate-900 text-white rounded-lg flex justify-between items-center text-sm font-bold border-2 border-slate-800">
+                        <div>
+                          <span className="font-sans tracking-wide uppercase block">NET INCOME / PROFIT</span>
+                          <span className="text-[11px] font-sans text-slate-400 font-normal">
+                            Net Profit Margin: {margin}%
+                          </span>
+                        </div>
+                        <span className={`text-lg tabular-nums ${net >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                          {formatPHP(net)}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Certification signature line */}
+                    <div className="pt-8 grid grid-cols-2 gap-8 text-center text-xs">
+                      <div>
+                        <div className="border-t border-slate-400 pt-1 font-semibold text-slate-700">
+                          Prepared By: Finance Officer
+                        </div>
+                        <p className="text-[10px] text-slate-400">Certified Transactional Ledger</p>
+                      </div>
+                      <div>
+                        <div className="border-t border-slate-400 pt-1 font-semibold text-slate-700">
+                          Approved By: Business Managing Owner
+                        </div>
+                        <p className="text-[10px] text-slate-400">Verified and Accepted</p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {/* CONSOLIDATED ALL-AREAS STATEMENT */}
+              <div className="bg-white rounded-xl border border-slate-200 shadow-xs p-6 sm:p-8 max-w-3xl mx-auto space-y-6">
+                <div className="text-center border-b border-slate-200 pb-4">
+                  <h2 className="text-base font-bold text-slate-900 tracking-tight uppercase">
+                    {companySettings.name}
+                  </h2>
+                  <p className="text-xs text-slate-500 mt-0.5">{companySettings.address} · TIN: {companySettings.tin}</p>
+                  <h3 className="text-sm font-bold text-slate-800 mt-3 tracking-wider uppercase font-mono">
+                    STATEMENT OF PROFIT AND LOSS
+                  </h3>
+                  <p className="text-xs font-bold text-slate-700 font-mono uppercase mt-1.5">
+                    Total — All Areas
+                  </p>
+                  <p className="text-xs text-slate-500 font-mono">
+                    For the Period: {formatDateDisplay(dateRange.startDate)} to {formatDateDisplay(dateRange.endDate)}
+                  </p>
+                  <p className="text-[10px] text-slate-400 mt-0.5">(All amounts stated in Philippine Peso ₱)</p>
+                </div>
+
+                <div className="space-y-5 text-xs font-mono">
+                  <div>
+                    <div className="flex justify-between py-1.5 font-bold text-slate-900 border-b border-slate-300">
+                      <span className="font-sans uppercase">TOTAL — ALL AREAS</span>
+                      <span></span>
+                    </div>
+                    <div className="divide-y divide-slate-100 pl-4 py-1">
+                      <div className="flex justify-between py-1 text-slate-700">
+                        <span>TOTAL COLLECTIONS</span>
+                        <span className="tabular-nums text-emerald-800">{formatPHP(areaReport.totalCollections)}</span>
+                      </div>
+                      <div className="flex justify-between py-1 text-slate-700">
+                        <span>TOTAL COSTS (JOBS + TAGGED EXPENSES)</span>
+                        <span className="tabular-nums text-rose-700">{formatPHP(areaReport.totalCosts)}</span>
+                      </div>
+                    </div>
+                    <div className="flex justify-between py-1.5 font-bold border-t border-slate-200 bg-slate-50 px-2 text-slate-900">
+                      <span>TOTAL NET CONTRIBUTION</span>
+                      <span className={`tabular-nums ${areaTotalNet >= 0 ? 'text-emerald-800' : 'text-rose-700'}`}>
+                        {formatPHP(areaTotalNet)}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="p-4 bg-slate-900 text-white rounded-lg flex justify-between items-center text-sm font-bold border-2 border-slate-800">
+                    <div>
+                      <span className="font-sans tracking-wide uppercase block">NET INCOME / PROFIT</span>
+                      <span className="text-[11px] font-sans text-slate-400 font-normal">
+                        Net Profit Margin: {areaMarginPct}%
+                      </span>
+                    </div>
+                    <span className={`text-lg tabular-nums ${areaTotalNet >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                      {formatPHP(areaTotalNet)}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="pt-8 grid grid-cols-2 gap-8 text-center text-xs">
+                  <div>
+                    <div className="border-t border-slate-400 pt-1 font-semibold text-slate-700">
+                      Prepared By: Finance Officer
+                    </div>
+                    <p className="text-[10px] text-slate-400">Certified Transactional Ledger</p>
+                  </div>
+                  <div>
+                    <div className="border-t border-slate-400 pt-1 font-semibold text-slate-700">
+                      Approved By: Business Managing Owner
+                    </div>
+                    <p className="text-[10px] text-slate-400">Verified and Accepted</p>
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
         </div>
       )}
     </div>

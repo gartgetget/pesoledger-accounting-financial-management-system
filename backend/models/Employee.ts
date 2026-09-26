@@ -10,6 +10,7 @@ export interface IEmployee {
   status: "Active" | "Inactive";
   dateStarted: string;
   phone: string;
+  area: string;
   createdBy: string;
   createdAt: Date;
   updatedAt: Date;
@@ -30,6 +31,7 @@ const employeeSchema = new mongoose.Schema<IEmployee>(
     },
     dateStarted: { type: String, default: "" },
     phone: { type: String, default: "" },
+    area: { type: String, default: "" },
     createdBy: { type: String, ref: "User" },
     createdAt: { type: Date, default: Date.now },
     updatedAt: { type: Date, default: Date.now },

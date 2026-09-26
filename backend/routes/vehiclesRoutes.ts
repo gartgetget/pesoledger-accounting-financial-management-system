@@ -3,6 +3,8 @@ import Vehicle from "../models/Vehicle.js";
 import VehicleExpense from "../models/VehicleExpense.js";
 import Employee from "../models/Employee.js";
 import PaymentMethod from "../models/PaymentMethod.js";
+import ExpenseEntry from "../models/ExpenseEntry.js";
+import Category from "../models/Category.js";
 import auth from "../middleware/auth.js";
 
 const router = createRouter();
@@ -14,6 +16,16 @@ const ensureWorkspaceAccess = (req: any, res: any, next: any) => {
     return res.status(403).json({ message: "Access denied" });
   }
   next();
+};
+
+const ledgerCategoryForVehicleExpense = (expenseType: string) =>
+  expenseType === "Fuel/Gas" ? "GAS" : "SASAKYAN";
+
+const findCategoryIdByName = async (workspaceId: string, name: string) => {
+  const exact = await Category.findOne({ workspaceId, name, type: "expense" });
+  if (exact) return exact._id.toString();
+  const ci = await Category.findOne({ workspaceId, name: new RegExp(`^${name}$`, "i"), type: "expense" });
+  return ci ? ci._id.toString() : "";
 };
 
 router.get("/:workspaceId/vehicles", ensureWorkspaceAccess, async (req, res) => {
@@ -76,7 +88,7 @@ router.get("/:workspaceId/vehicle-expenses", ensureWorkspaceAccess, async (req, 
 
 router.post("/:workspaceId/vehicle-expenses", ensureWorkspaceAccess, async (req, res) => {
   const { workspaceId } = req.params;
-  const { vehicleId, vehicleName, date, expenseType, amount, paymentMethodId, driverResponsible, odometer, description, notes } = req.body;
+  const { vehicleId, vehicleName, date, expenseType, amount, paymentMethodId, area, driverResponsible, odometer, description, notes } = req.body;
 
   if (!vehicleId || !date || !expenseType || !amount) {
     return res.status(400).json({ message: "Vehicle, date, expense type, and amount are required" });
@@ -92,6 +104,7 @@ router.post("/:workspaceId/vehicle-expenses", ensureWorkspaceAccess, async (req,
     expenseType,
     amount: Number(amount),
     paymentMethodId: paymentMethodId || "Cash",
+    area: area || "",
     driverResponsible: driverResponsible || "",
     odometer: odometer || 0,
     description: description || "",
@@ -99,7 +112,42 @@ router.post("/:workspaceId/vehicle-expenses", ensureWorkspaceAccess, async (req,
     createdBy: req.user._id.toString(),
   });
 
+  try {
+    const category = ledgerCategoryForVehicleExpense(expenseType);
+    const categoryId = await findCategoryIdByName(workspaceId, category);
+    const ledgerEntry = await ExpenseEntry.create({
+      workspaceId,
+      date: new Date(date),
+      categoryId,
+      category,
+      description: description || `${expenseType} — ${expenseEntry.vehicleName}`,
+      amount: Number(amount),
+      paymentMethod: paymentMethodId || "Cash",
+      area: area || "",
+      relatedModule: "vehicle",
+      relatedId: expenseEntry._id.toString(),
+      createdBy: req.user._id.toString(),
+    });
+    expenseEntry.expenseId = ledgerEntry._id.toString();
+    expenseEntry.updatedAt = new Date();
+    await expenseEntry.save();
+  } catch (e) {
+    console.error("Failed to post vehicle expense to ledger", e);
+  }
+
   res.status(201).json(expenseEntry);
+});
+
+router.delete("/:workspaceId/vehicle-expenses/:id", ensureWorkspaceAccess, async (req, res) => {
+  const { workspaceId, id } = req.params;
+  const entry = await VehicleExpense.findOne({ _id: id, workspaceId });
+  if (!entry) return res.status(404).json({ message: "Vehicle expense not found" });
+
+  if (entry.expenseId) {
+    await ExpenseEntry.deleteOne({ _id: entry.expenseId, workspaceId }).catch(() => null);
+  }
+  await entry.deleteOne();
+  res.json({ message: "Vehicle expense deleted" });
 });
 
 router.get("/:workspaceId/employees", ensureWorkspaceAccess, async (req, res) => {
@@ -110,7 +158,7 @@ router.get("/:workspaceId/employees", ensureWorkspaceAccess, async (req, res) =>
 
 router.post("/:workspaceId/employees", ensureWorkspaceAccess, async (req, res) => {
   const { workspaceId } = req.params;
-  const { name, position, dailyRate, monthlySalary, basicSalary, status, dateStarted, phone } = req.body;
+  const { name, position, dailyRate, monthlySalary, basicSalary, status, dateStarted, phone, area } = req.body;
 
   if (!name) {
     return res.status(400).json({ message: "Employee name is required" });
@@ -125,6 +173,7 @@ router.post("/:workspaceId/employees", ensureWorkspaceAccess, async (req, res) =
     status: status || "Active",
     dateStarted: dateStarted || "",
     phone: phone || "",
+    area: area || "",
     createdBy: req.user._id.toString(),
   });
 

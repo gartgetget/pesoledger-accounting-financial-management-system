@@ -21,7 +21,6 @@ import { YearlyAccountingView } from './components/yearly/YearlyAccountingView';
 import { ReportsView } from './components/reports/ReportsView';
 import { MigrationView } from './components/migration/MigrationView';
 import { SettingsView } from './components/settings/SettingsView';
-import { AuditView } from './components/audit/AuditView';
 import { LoginView } from './components/auth/LoginView';
 import { AuthSuccessView } from './components/auth/AuthSuccessView';
 import { RevenueTransaction, Expense, ServiceJob } from './types';
@@ -172,39 +171,43 @@ const MainAppContent: React.FC = () => {
             {activeTab === 'migration' && <MigrationView />}
 
             {activeTab === 'settings' && <SettingsView />}
-
-            {activeTab === 'audit' && <AuditView />}
           </div>
         </main>
       </div>
 
       {/* GLOBAL TRANSACTION ENTRY MODALS */}
-      <RevenueModal
-        isOpen={isRevenueModalOpen}
-        onClose={() => {
-          setIsRevenueModalOpen(false);
-          setEditingRevenue(null);
-        }}
-        editItem={editingRevenue}
-      />
+      {isRevenueModalOpen && (
+        <RevenueModal
+          isOpen
+          onClose={() => {
+            setIsRevenueModalOpen(false);
+            setEditingRevenue(null);
+          }}
+          editItem={editingRevenue}
+        />
+      )}
 
-      <ExpenseModal
-        isOpen={isExpenseModalOpen}
-        onClose={() => {
-          setIsExpenseModalOpen(false);
-          setEditingExpense(null);
-        }}
-        editItem={editingExpense}
-      />
+      {isExpenseModalOpen && (
+        <ExpenseModal
+          isOpen
+          onClose={() => {
+            setIsExpenseModalOpen(false);
+            setEditingExpense(null);
+          }}
+          editItem={editingExpense}
+        />
+      )}
 
-      <JobModal
-        isOpen={isJobModalOpen}
-        onClose={() => {
-          setIsJobModalOpen(false);
-          setEditingJob(null);
-        }}
-        editItem={editingJob}
-      />
+      {isJobModalOpen && (
+        <JobModal
+          isOpen
+          onClose={() => {
+            setIsJobModalOpen(false);
+            setEditingJob(null);
+          }}
+          editItem={editingJob}
+        />
+      )}
     </div>
   );
 };

@@ -115,18 +115,20 @@ export const JobInvoiceModal: React.FC<JobInvoiceModalProps> = ({ job, onClose }
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                <tr>
-                  <td className="py-2.5 px-4 font-medium text-slate-800">
-                    Professional Technical Labor & Diagnostics
-                  </td>
-                  <td className="py-2.5 px-3 text-center text-slate-600">1</td>
-                  <td className="py-2.5 px-4 text-right font-mono text-slate-600">
-                    {formatPHP(job.laborAmount)}
-                  </td>
-                  <td className="py-2.5 px-4 text-right font-mono font-bold text-slate-900">
-                    {formatPHP(job.laborAmount)}
-                  </td>
-                </tr>
+                {job.laborAmount > 0 && (
+                  <tr>
+                    <td className="py-2.5 px-4 font-medium text-slate-800">
+                      Professional Technical Labor & Diagnostics
+                    </td>
+                    <td className="py-2.5 px-3 text-center text-slate-600">1</td>
+                    <td className="py-2.5 px-4 text-right font-mono text-slate-600">
+                      {formatPHP(job.laborAmount)}
+                    </td>
+                    <td className="py-2.5 px-4 text-right font-mono font-bold text-slate-900">
+                      {formatPHP(job.laborAmount)}
+                    </td>
+                  </tr>
+                )}
 
                 {job.partsUsed && job.partsUsed.map((p, idx) => (
                   <tr key={idx}>

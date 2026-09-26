@@ -166,15 +166,13 @@ export const PaymentMethodsCard: React.FC = () => {
                       >
                         <Edit2 className="w-3.5 h-3.5" />
                       </button>
-                      {paymentMethods.length > 1 && (
-                        <button
-                          onClick={() => deletePaymentMethod(pm.id)}
-                          className="text-slate-400 hover:text-rose-600 cursor-pointer"
-                          title="Delete payment method"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      )}
+                      <button
+                        onClick={() => deletePaymentMethod(pm.id)}
+                        className="text-slate-400 hover:text-rose-600 cursor-pointer"
+                        title="Delete payment method"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
                     </div>
                   )}
                 </>

@@ -21,6 +21,7 @@ export const RevenueModal: React.FC<RevenueModalProps> = ({
     paymentMethods,
     employees,
     customers,
+    areas,
     addRevenueTransaction,
     updateRevenueTransaction,
     addCustomer,
@@ -45,6 +46,7 @@ export const RevenueModal: React.FC<RevenueModalProps> = ({
     editItem ? editItem.paymentMethodId : paymentMethods[0]?.id || 'pm-1'
   );
   const [employeeId, setEmployeeId] = useState(editItem ? editItem.employeeId || '' : '');
+  const [area, setArea] = useState(editItem ? editItem.area || '' : '');
   const [notes, setNotes] = useState(editItem ? editItem.notes || '' : '');
 
   if (!isOpen) return null;
@@ -92,6 +94,7 @@ export const RevenueModal: React.FC<RevenueModalProps> = ({
       paymentMethodId,
       employeeId: assignedEmp?.id,
       employeeName: assignedEmp?.name,
+      area,
       notes: notes.trim(),
     };
 
@@ -315,6 +318,27 @@ export const RevenueModal: React.FC<RevenueModalProps> = ({
                     {emp.name} ({emp.position})
                   </option>
                 ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Area / Service Zone
+              </label>
+              <select
+                value={area}
+                onChange={(e) => setArea(e.target.value)}
+                className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg focus:ring-1 focus:ring-emerald-500 focus:outline-hidden bg-white"
+              >
+                <option value="">-- None / Unassigned --</option>
+                {areas.map((a) => (
+                  <option key={a.id} value={a.name}>
+                    {a.name}
+                  </option>
+                ))}
+                {area && !areas.some((a) => a.name === area) && (
+                  <option value={area}>{area}</option>
+                )}
               </select>
             </div>
           </div>

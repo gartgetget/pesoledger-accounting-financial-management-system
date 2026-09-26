@@ -22,7 +22,12 @@ router.get("/:workspaceId/revenue", ensureWorkspaceAccess, async (req, res) => {
 
 router.post("/:workspaceId/revenue", ensureWorkspaceAccess, async (req, res) => {
   const { workspaceId } = req.params;
-  const { date, customerId, categoryId, description, amount, paymentMethod, referenceNo } = req.body;
+  const b = req.body || {};
+  const date = b.date;
+  const amount = b.amount;
+  const category = typeof b.category === "string" && b.category ? b.category : (b.categoryId || "");
+  const categoryId = typeof b.categoryId === "string" ? b.categoryId : "";
+  const paymentMethod = b.paymentMethod || b.paymentMethodId || "Cash";
 
   if (!date || !amount) {
     return res.status(400).json({ message: "Date and amount are required" });
@@ -31,12 +36,15 @@ router.post("/:workspaceId/revenue", ensureWorkspaceAccess, async (req, res) => 
   const entry = await RevenueEntry.create({
     workspaceId,
     date: new Date(date),
-    customerId,
+    customerId: b.customerId,
     categoryId,
-    description: description || "",
+    category,
+    description: b.description || "",
     amount: Number(amount),
-    paymentMethod: paymentMethod || "Cash",
-    referenceNo: referenceNo || "",
+    paymentMethod,
+    referenceNo: b.referenceNo || "",
+    relatedId: b.relatedId || "",
+    area: b.area || "",
     createdBy: req.user._id.toString(),
   });
 
@@ -55,7 +63,17 @@ router.put("/:workspaceId/revenue/:id", ensureWorkspaceAccess, async (req, res) 
   const entry = await RevenueEntry.findOne({ _id: id, workspaceId });
   if (!entry) return res.status(404).json({ message: "Revenue entry not found" });
 
-  Object.assign(entry, req.body);
+  const b = req.body || {};
+  const allowed: Record<string, unknown> = {};
+  const keys = ["date", "customerId", "categoryId", "category", "description", "amount", "paymentMethod", "referenceNo", "relatedId", "area"];
+  for (const k of keys) {
+    if (b[k] !== undefined) allowed[k] = b[k];
+  }
+  if (b.paymentMethod === undefined && b.paymentMethodId !== undefined) allowed.paymentMethod = b.paymentMethodId;
+  if (b.date) allowed.date = new Date(b.date);
+  if (b.amount !== undefined) allowed.amount = Number(b.amount);
+
+  Object.assign(entry, allowed);
   entry.updatedAt = new Date();
   await entry.save();
 
@@ -66,6 +84,13 @@ router.delete("/:workspaceId/revenue/:id", ensureWorkspaceAccess, async (req, re
   const { workspaceId, id } = req.params;
   const entry = await RevenueEntry.findOne({ _id: id, workspaceId });
   if (!entry) return res.status(404).json({ message: "Revenue entry not found" });
+
+  if (entry.relatedId) {
+    return res.status(400).json({
+      message:
+        "This collection is linked to a job order — edit the job order instead (set Amount Paid to 0 to remove it).",
+    });
+  }
 
   await entry.deleteOne();
   res.json({ message: "Revenue entry deleted" });

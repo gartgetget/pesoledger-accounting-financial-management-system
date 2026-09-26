@@ -67,7 +67,7 @@ export const Header: React.FC<HeaderProps> = ({
       case 'migration':
         return 'Excel Workbook Migration & Backup';
       case 'settings':
-        return 'System Configuration & Audit Logs';
+        return 'System Configuration';
       default:
         return 'Accounting Portal';
     }

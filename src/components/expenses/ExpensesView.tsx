@@ -77,6 +77,7 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
     const exportData = filteredList.map((e) => ({
       'Date': e.date,
       'Category': e.category,
+      'Area': e.area || '',
       'Description / Particulars': e.description,
       'Amount (PHP)': e.amount,
       'Payment Method': getMethodName(e.paymentMethodId),
@@ -93,6 +94,7 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
     const exportData = filteredList.map((e) => ({
       Date: e.date,
       Category: e.category,
+      Area: e.area || '',
       Description: e.description,
       Amount: e.amount,
       PaymentMethod: getMethodName(e.paymentMethodId),
@@ -241,6 +243,7 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
                 <th className="py-3 px-4">Vendor / Supplier</th>
                 <th className="py-3 px-4 hidden md:table-cell">Person Responsible</th>
                 <th className="py-3 px-4 hidden md:table-cell">Payment Method</th>
+                <th className="py-3 px-4 hidden md:table-cell">Area</th>
                 <th className="py-3 px-4 hidden md:table-cell">OR / Ref #</th>
                 <th className="py-3 px-4 text-right">Amount (₱)</th>
                 <th className="py-3 px-4 text-center">Actions</th>
@@ -249,7 +252,7 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
             <tbody className="divide-y divide-slate-100">
               {filteredList.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="py-12 text-center text-slate-400 text-xs">
+                  <td colSpan={10} className="py-12 text-center text-slate-400 text-xs">
                     No expense records found matching current criteria.
                   </td>
                 </tr>
@@ -278,6 +281,9 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
                     </td>
                     <td className="py-3 px-4 text-slate-600 whitespace-nowrap hidden md:table-cell">
                       {getMethodName(e.paymentMethodId)}
+                    </td>
+                    <td className="py-3 px-4 text-slate-600 whitespace-nowrap hidden md:table-cell">
+                      {e.area || '—'}
                     </td>
                     <td className="py-3 px-4 font-mono text-slate-500 whitespace-nowrap hidden md:table-cell">
                       {e.referenceNumber || '—'}

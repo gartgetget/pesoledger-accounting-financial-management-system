@@ -35,6 +35,12 @@ export interface Employee {
   dateStarted?: string;
   phone?: string;
   contact?: string;
+  area?: string;
+}
+
+export interface Area {
+  id: string;
+  name: string;
 }
 
 export interface PayrollRecord {
@@ -45,7 +51,8 @@ export interface PayrollRecord {
   period: string; // e.g. "Sept 1 - Sept 15, 2026"
   daysWorked?: number;
   dailyRate?: number;
-  basicPay?: number;
+  foodRate?: number;
+  coop?: number;
   basicSalary: number;
   overtimeHours?: number;
   overtimePay: number;
@@ -79,6 +86,7 @@ export interface VehicleExpense {
   expenseType: 'Fuel/Gas' | 'Maintenance' | 'Repairs' | 'Toll' | 'Parking' | 'Other';
   amount: number;
   paymentMethodId: string;
+  area?: string;
   driverResponsible?: string;
   odometer?: number;
   description: string;
@@ -115,11 +123,19 @@ export interface PartUsage {
 export type PaymentStatus = 'Paid' | 'Partially Paid' | 'Unpaid';
 export type JobStatus = 'open' | 'in_progress' | 'completed' | 'cancelled';
 
+export interface JobCustomer {
+  customerId: string;
+  name: string;
+  amountCollected: number;
+}
+
 export interface ServiceJob {
   id: string;
   jobNumber: string; // e.g. "JOB-2026-001"
   customerId: string;
   customerName: string;
+  area?: string;
+  customers?: JobCustomer[];
   date: string;
   technicianId: string;
   technicianName: string;
@@ -162,6 +178,7 @@ export interface RevenueTransaction {
   employeeName?: string;
   notes?: string;
   serviceJobId?: string;
+  area?: string;
   isVoid?: boolean;
   voidReason?: string;
   createdAt: string;
@@ -174,6 +191,7 @@ export interface Expense {
   description: string;
   amount: number;
   paymentMethodId: string;
+  area?: string;
   vendorSupplier?: string;
   employeeId?: string;
   employeeName?: string;
@@ -235,5 +253,4 @@ export type ActiveTab =
   | 'monthly'
   | 'yearly'
   | 'migration'
-  | 'settings'
-  | 'audit';
+  | 'settings';

@@ -28,7 +28,7 @@ export const InventoryView: React.FC = () => {
   // Form states for new part
   const [name, setName] = useState('');
   const [partNumber, setPartNumber] = useState('');
-  const [category, setCategory] = useState('Capacitor');
+  const [category, setCategory] = useState('Washing Machine');
   const [costPrice, setCostPrice] = useState('');
   const [sellingPrice, setSellingPrice] = useState('');
   const [quantity, setQuantity] = useState('10');
@@ -69,8 +69,12 @@ export const InventoryView: React.FC = () => {
 
     setName('');
     setPartNumber('');
+    setCategory('Washing Machine');
     setCostPrice('');
     setSellingPrice('');
+    setQuantity('10');
+    setMinStock('3');
+    setSupplier('');
     setShowAddModal(false);
   };
 
@@ -426,13 +430,14 @@ export const InventoryView: React.FC = () => {
                     onChange={(e) => setCategory(e.target.value)}
                     className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg bg-white"
                   >
-                    <option value="Capacitor">Capacitor</option>
-                    <option value="Refrigerant/Freon">Refrigerant / Freon</option>
-                    <option value="Motor & Fan">Motor & Fan</option>
-                    <option value="Pump & Valve">Pump & Valve</option>
-                    <option value="Electronic PCB">Electronic PCB</option>
-                    <option value="Copper Pipe / Fittings">Copper Pipe / Fittings</option>
-                    <option value="Consumable">Consumable</option>
+                    <option value="Washing Machine">Washing Machine</option>
+                    <option value="Aircon">Aircon</option>
+                    <option value="Refrigerator">Refrigerator</option>
+                    <option value="TV">TV</option>
+                    <option value="Microwave">Microwave</option>
+                    <option value="Vacuum">Vacuum</option>
+                    <option value="Styler">Styler</option>
+                    <option value="Home Theater">Home Theater</option>
                   </select>
                 </div>
               </div>

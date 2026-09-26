@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { useAccounting } from '../../context/AccountingContext';
 import { PaymentMethodsCard } from './PaymentMethodsCard';
+import { AreasCard } from './AreasCard';
 
 export const SettingsView: React.FC = () => {
   const {
@@ -443,6 +444,9 @@ export const SettingsView: React.FC = () => {
 
       {/* SECTION 3: PAYMENT METHODS */}
       <PaymentMethodsCard />
+
+      {/* SECTION 4: SERVICE AREAS */}
+      <AreasCard />
     </div>
   );
 };

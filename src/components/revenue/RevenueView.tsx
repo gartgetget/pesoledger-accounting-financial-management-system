@@ -32,6 +32,7 @@ export const RevenueView: React.FC<RevenueViewProps> = ({
     revenueCategories,
     paymentMethods,
     employees,
+    areas,
     dateRange,
     voidRevenueTransaction,
     userRole,
@@ -41,6 +42,7 @@ export const RevenueView: React.FC<RevenueViewProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('ALL');
   const [paymentFilter, setPaymentFilter] = useState('ALL');
+  const [areaFilter, setAreaFilter] = useState('ALL');
   const [employeeFilter, setEmployeeFilter] = useState('ALL');
   const [sortBy, setSortBy] = useState<'date-desc' | 'date-asc' | 'amount-desc' | 'amount-asc'>('date-desc');
   const [includeVoid, setIncludeVoid] = useState(false);
@@ -52,6 +54,10 @@ export const RevenueView: React.FC<RevenueViewProps> = ({
       if (!isDateInRange(tx.date, dateRange)) return false;
       if (categoryFilter !== 'ALL' && tx.category !== categoryFilter) return false;
       if (paymentFilter !== 'ALL' && tx.paymentMethodId !== paymentFilter) return false;
+      if (areaFilter !== 'ALL') {
+        const wanted = areaFilter === 'UNASSIGNED' ? '' : areaFilter;
+        if ((tx.area || '') !== wanted) return false;
+      }
       if (employeeFilter !== 'ALL' && tx.employeeId !== employeeFilter) return false;
 
       if (searchTerm.trim()) {
@@ -77,6 +83,7 @@ export const RevenueView: React.FC<RevenueViewProps> = ({
     dateRange,
     categoryFilter,
     paymentFilter,
+    areaFilter,
     employeeFilter,
     searchTerm,
     sortBy,
@@ -162,7 +169,7 @@ export const RevenueView: React.FC<RevenueViewProps> = ({
 
       {/* FILTER BAR & SEARCH (Core Objective 18 & 19) */}
       <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs space-y-3">
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-2.5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-6 gap-2.5">
           {/* Search Input */}
           <div className="md:col-span-2 relative">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -188,6 +195,23 @@ export const RevenueView: React.FC<RevenueViewProps> = ({
                   {c.name}
                 </option>
               ))}
+            </select>
+          </div>
+
+          {/* Area Filter */}
+          <div>
+            <select
+              value={areaFilter}
+              onChange={(e) => setAreaFilter(e.target.value)}
+              className="w-full text-xs px-3 py-2 border border-slate-200 rounded-lg focus:outline-hidden bg-white text-slate-700"
+            >
+              <option value="ALL">All Areas</option>
+              {areas.map((a) => (
+                <option key={a.id} value={a.name}>
+                  {a.name}
+                </option>
+              ))}
+              <option value="UNASSIGNED">Unassigned</option>
             </select>
           </div>
 

@@ -13,7 +13,6 @@ import {
   CalendarRange,
   FileSpreadsheet,
   Settings,
-  History,
   ShieldCheck,
   ShieldAlert,
   AlertTriangle,
@@ -48,7 +47,6 @@ export const Sidebar: React.FC<{ isOpen?: boolean; onNavigate?: () => void }> = 
     { id: 'yearly', label: 'Yearly Matrix (12-Mo)', icon: CalendarRange },
     { id: 'migration', label: 'Excel Import / Backup', icon: FileSpreadsheet },
     { id: 'settings', label: 'Settings', icon: Settings },
-    { id: 'audit', label: 'Audit Trail', icon: History },
   ];
 
   return (

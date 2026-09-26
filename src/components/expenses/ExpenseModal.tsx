@@ -22,6 +22,7 @@ export const ExpenseModal: React.FC<ExpenseModalProps> = ({
     expenseCategories,
     paymentMethods,
     employees,
+    areas,
     addExpense,
     updateExpense,
   } = useAccounting();
@@ -38,6 +39,7 @@ export const ExpenseModal: React.FC<ExpenseModalProps> = ({
     editItem ? editItem.paymentMethodId : paymentMethods[0]?.id || 'pm-1'
   );
   const [vendorSupplier, setVendorSupplier] = useState(editItem ? editItem.vendorSupplier || '' : '');
+  const [area, setArea] = useState(editItem ? editItem.area || '' : '');
   const [employeeId, setEmployeeId] = useState(editItem ? editItem.employeeId || '' : '');
   const [referenceNumber, setReferenceNumber] = useState(
     editItem ? editItem.referenceNumber || '' : ''
@@ -63,6 +65,7 @@ export const ExpenseModal: React.FC<ExpenseModalProps> = ({
       description: description.trim() || `${category} Expense`,
       amount: parsedAmount,
       paymentMethodId,
+      area,
       vendorSupplier: vendorSupplier.trim(),
       employeeId: assignedEmp?.id,
       employeeName: assignedEmp?.name,
@@ -179,6 +182,24 @@ export const ExpenseModal: React.FC<ExpenseModalProps> = ({
                 ))}
               </select>
             </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">
+              Area
+            </label>
+            <select
+              value={area}
+              onChange={(e) => setArea(e.target.value)}
+              className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg focus:ring-1 focus:ring-rose-500 focus:outline-hidden bg-white"
+            >
+              <option value="">-- None / Unassigned --</option>
+              {areas.map((a) => (
+                <option key={a.id} value={a.name}>
+                  {a.name}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

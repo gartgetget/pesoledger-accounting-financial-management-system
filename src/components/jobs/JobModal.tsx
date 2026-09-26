@@ -3,13 +3,24 @@ import { X, Plus, Trash2, Calculator, Wrench, Package } from 'lucide-react';
 import { useAccounting } from '../../context/AccountingContext';
 import { formatPHP, parseNumber } from '../../utils/currency';
 import { getTodayDateString } from '../../utils/date';
-import { PartUsage, PaymentStatus, JobStatus, ServiceJob } from '../../types';
+import { PartUsage, PaymentStatus, JobStatus, ServiceJob, JobCustomer } from '../../types';
 
 interface JobModalProps {
   isOpen: boolean;
   onClose: () => void;
   editItem?: ServiceJob | null;
 }
+
+const nextJobNumber = (jobs: ServiceJob[]): string => {
+  const year = new Date().getFullYear();
+  const prefix = `JOB-${year}-`;
+  const max = jobs
+    .map((j) => j.jobNumber)
+    .filter((n) => n.startsWith(prefix))
+    .map((n) => parseInt(n.slice(prefix.length), 10))
+    .reduce((a, b) => (Number.isNaN(b) ? a : Math.max(a, b)), 0);
+  return `${prefix}${String(max + 1).padStart(3, '0')}`;
+};
 
 export const JobModal: React.FC<JobModalProps> = ({
   isOpen,
@@ -23,6 +34,7 @@ export const JobModal: React.FC<JobModalProps> = ({
     serviceCategories,
     paymentMethods,
     serviceJobs,
+    areas,
     createServiceJob,
     updateServiceJob,
     addCustomer,
@@ -30,23 +42,29 @@ export const JobModal: React.FC<JobModalProps> = ({
 
   const [date, setDate] = useState(editItem ? editItem.date : getTodayDateString());
   const [jobNumber, setJobNumber] = useState(
-    editItem
-      ? editItem.jobNumber
-      : `JOB-${new Date().getFullYear()}-${String(serviceJobs.length + 1).padStart(3, '0')}`
+    editItem ? editItem.jobNumber : nextJobNumber(serviceJobs)
   );
-  const [customerId, setCustomerId] = useState(editItem ? editItem.customerId : customers[0]?.id || '');
-  const [customCustomerName, setCustomCustomerName] = useState(editItem ? editItem.customerName : '');
-  const [technicianId, setTechnicianId] = useState(
-    editItem ? editItem.technicianId : employees[0]?.id || ''
+  const [jobCustomers, setJobCustomers] = useState<JobCustomer[]>(() => {
+    if (editItem?.customers && editItem.customers.length > 0) return editItem.customers;
+    if (editItem) {
+      return [{ customerId: editItem.customerId || '', name: editItem.customerName || '', amountCollected: editItem.amountPaid || 0 }];
+    }
+    return [{ customerId: '', name: '', amountCollected: 0 }];
+  });
+  const [area, setArea] = useState(
+    editItem ? editItem.area || '' : employees[0]?.area || ''
+  );
+  const [technicianName, setTechnicianName] = useState(
+    editItem ? editItem.technicianName || '' : ''
   );
   const [serviceCategory, setServiceCategory] = useState(
     editItem ? editItem.serviceCategory : serviceCategories[0]?.name || 'SERVICE'
   );
   const [description, setDescription] = useState(editItem ? editItem.description : '');
-  const [laborAmount, setLaborAmount] = useState<string>(
-    editItem ? String(editItem.laborAmount) : '1500'
+  const [laborAmount] = useState<string>(
+    editItem ? String(editItem.laborAmount) : '0'
   );
-  const [otherCharges, setOtherCharges] = useState<string>(
+  const [otherCharges] = useState<string>(
     editItem ? String(editItem.otherCharges) : '0'
   );
 
@@ -55,11 +73,11 @@ export const JobModal: React.FC<JobModalProps> = ({
     editItem ? editItem.partsUsed || [] : []
   );
 
-  // Discount
-  const [discountType, setDiscountType] = useState<'percentage' | 'amount'>(
+  // Discount (kept from stored job so editing never changes its total)
+  const [discountType] = useState<'percentage' | 'amount'>(
     editItem ? editItem.discountType : 'amount'
   );
-  const [discountValue, setDiscountValue] = useState<string>(
+  const [discountValue] = useState<string>(
     editItem ? String(editItem.discountValue) : '0'
   );
 
@@ -121,6 +139,32 @@ export const JobModal: React.FC<JobModalProps> = ({
     setSelectedParts(selectedParts.filter((_, i) => i !== index));
   };
 
+  // Customers & collections repeater
+  const updateCustomerRow = (index: number, patch: Partial<JobCustomer>) => {
+    setJobCustomers((prev) =>
+      prev.map((row, i) => {
+        if (i !== index) return row;
+        const merged = { ...row, ...patch };
+        if (patch.name !== undefined) {
+          const match = customers.find((c) => c.name === patch.name);
+          merged.customerId = match ? match.id : '';
+        }
+        return merged;
+      })
+    );
+  };
+
+  const addCustomerRow = () => {
+    setJobCustomers((prev) => [...prev, { customerId: '', name: '', amountCollected: 0 }]);
+  };
+
+  const removeCustomerRow = (index: number) => {
+    setJobCustomers((prev) => (prev.length > 1 ? prev.filter((_, i) => i !== index) : prev));
+  };
+
+  const cleanCustomerRows = jobCustomers.filter((c) => c.name.trim() || c.amountCollected > 0);
+  const totalCollected = cleanCustomerRows.reduce((s, c) => s + (Number(c.amountCollected) || 0), 0);
+
   // Computations
   const parsedLabor = parseNumber(laborAmount);
   const parsedOther = parseNumber(otherCharges);
@@ -138,30 +182,38 @@ export const JobModal: React.FC<JobModalProps> = ({
   }
 
   const finalTotal = Math.max(0, subtotal - computedDiscount);
-  const actualPaid = amountPaid ? parseNumber(amountPaid) : paymentStatus === 'Paid' ? finalTotal : 0;
+  const actualPaid =
+    totalCollected > 0
+      ? totalCollected
+      : amountPaid
+        ? parseNumber(amountPaid)
+        : paymentStatus === 'Paid'
+          ? finalTotal
+          : 0;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!jobNumber.trim() || !description.trim()) {
       alert('Please fill in Job Number and Description.');
       return;
     }
 
-    let resolvedCustomerName = customCustomerName.trim();
-    if (!resolvedCustomerName) {
-      const selectedCust = customers.find((c) => c.id === customerId);
-      resolvedCustomerName = selectedCust ? selectedCust.name : 'Walk-in Customer';
-    }
-
-    const tech = employees.find((emp) => emp.id === technicianId);
+    const primaryRow = cleanCustomerRows.find((c) => c.name.trim());
+    const resolvedCustomerName = primaryRow ? primaryRow.name.trim() : 'Walk-in Customer';
 
     const payload = {
       jobNumber: jobNumber.trim(),
-      customerId: customerId || 'cust-direct',
+      customerId: primaryRow?.customerId || 'cust-direct',
       customerName: resolvedCustomerName,
+      area,
+      customers: cleanCustomerRows.map((c) => ({
+        customerId: c.customerId || '',
+        name: c.name.trim(),
+        amountCollected: Number(c.amountCollected) || 0,
+      })),
       date,
-      technicianId,
-      technicianName: tech ? tech.name : 'General Technician',
+      technicianId: '',
+      technicianName: technicianName.trim() || 'General Technician',
       serviceCategory,
       description: description.trim(),
       laborAmount: parsedLabor,
@@ -183,11 +235,11 @@ export const JobModal: React.FC<JobModalProps> = ({
 
     if (editItem) {
       updateServiceJob(editItem.id, payload);
+      onClose();
     } else {
-      createServiceJob(payload);
+      const createdId = await createServiceJob(payload);
+      if (createdId) onClose();
     }
-
-    onClose();
   };
 
   return (
@@ -265,41 +317,96 @@ export const JobModal: React.FC<JobModalProps> = ({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Customer Name / Address
+                Technician Assigned <span className="text-rose-500">*</span>
               </label>
               <input
                 type="text"
-                list="job-cust-list"
-                value={customCustomerName}
-                onChange={(e) => setCustomCustomerName(e.target.value)}
-                placeholder="Select or enter customer..."
-                className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg"
+                value={technicianName}
+                onChange={(e) => setTechnicianName(e.target.value)}
+                placeholder="e.g. Juan Dela Cruz"
+                className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg bg-white"
                 required
               />
-              <datalist id="job-cust-list">
-                {customers.map((c) => (
-                  <option key={c.id} value={c.name} />
-                ))}
-              </datalist>
             </div>
 
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Technician Assigned <span className="text-rose-500">*</span>
+                Tech Area / Service Zone
               </label>
               <select
-                value={technicianId}
-                onChange={(e) => setTechnicianId(e.target.value)}
+                value={area}
+                onChange={(e) => setArea(e.target.value)}
                 className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg bg-white"
-                required
               >
-                {employees.map((emp) => (
-                  <option key={emp.id} value={emp.id}>
-                    {emp.name} ({emp.position})
+                <option value="">No area</option>
+                {areas.map((a) => (
+                  <option key={a.id} value={a.name}>
+                    {a.name}
                   </option>
                 ))}
+                {area && !areas.some((a) => a.name === area) && (
+                  <option value={area}>{area}</option>
+                )}
               </select>
             </div>
+          </div>
+
+          {/* CUSTOMERS & COLLECTIONS (MULTI-CUSTOMER + AUTO-SUMMARY) */}
+          <div className="p-3.5 bg-slate-50 rounded-lg border border-slate-200 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-slate-800">
+                Customers & Collections
+                <span className="ml-2 text-[10px] font-semibold text-slate-400">
+                  add each customer and their collection — totals auto-summarize
+                </span>
+              </span>
+              <span className="text-xs font-bold text-emerald-700 font-mono">
+                Total: {formatPHP(totalCollected)}
+              </span>
+            </div>
+
+            {jobCustomers.map((row, idx) => (
+              <div key={idx} className="flex items-center gap-2">
+                <input
+                  type="text"
+                  list="job-cust-list"
+                  value={row.name}
+                  onChange={(e) => updateCustomerRow(idx, { name: e.target.value })}
+                  placeholder="Customer name..."
+                  className="flex-1 min-w-0 text-xs px-3 py-1.5 border border-slate-300 rounded-lg bg-white"
+                />
+                <input
+                  type="number"
+                  step="any"
+                  value={row.amountCollected || ''}
+                  onChange={(e) => updateCustomerRow(idx, { amountCollected: parseNumber(e.target.value) })}
+                  placeholder="Collection (₱)"
+                  className="w-36 text-xs px-3 py-1.5 border border-slate-300 rounded-lg font-mono font-semibold bg-white"
+                />
+                <button
+                  type="button"
+                  onClick={() => removeCustomerRow(idx)}
+                  disabled={jobCustomers.length <= 1}
+                  className="p-1 text-slate-400 hover:text-rose-600 cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                  title="Remove customer"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ))}
+
+            <button
+              type="button"
+              onClick={addCustomerRow}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-700 hover:text-slate-900 cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5" /> Add Customer
+            </button>
+            <datalist id="job-cust-list">
+              {customers.map((c) => (
+                <option key={c.id} value={c.name} />
+              ))}
+            </datalist>
           </div>
 
           <div>
@@ -404,72 +511,11 @@ export const JobModal: React.FC<JobModalProps> = ({
             )}
           </div>
 
-          {/* CHARGES & DISCOUNT CALCULATIONS (SECTIONS 9 & 10) */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Labor / Service Charge (₱)
-              </label>
-              <input
-                type="number"
-                step="any"
-                value={laborAmount}
-                onChange={(e) => setLaborAmount(e.target.value)}
-                className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg font-mono font-semibold"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Other Charges / Diagnostic (₱)
-              </label>
-              <input
-                type="number"
-                step="any"
-                value={otherCharges}
-                onChange={(e) => setOtherCharges(e.target.value)}
-                className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg font-mono font-semibold"
-              />
-            </div>
-
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="text-xs font-semibold text-slate-700">
-                  Discount ({discountType === 'percentage' ? '%' : '₱'})
-                </label>
-                <div className="flex items-center text-[10px] gap-1">
-                  <button
-                    type="button"
-                    onClick={() => setDiscountType('amount')}
-                    className={`px-1.5 py-0.5 rounded cursor-pointer ${discountType === 'amount' ? 'bg-slate-800 text-white' : 'text-slate-500'}`}
-                  >
-                    ₱
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setDiscountType('percentage')}
-                    className={`px-1.5 py-0.5 rounded cursor-pointer ${discountType === 'percentage' ? 'bg-slate-800 text-white' : 'text-slate-500'}`}
-                  >
-                    %
-                  </button>
-                </div>
-              </div>
-              <input
-                type="number"
-                step="any"
-                value={discountValue}
-                onChange={(e) => setDiscountValue(e.target.value)}
-                className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg font-mono font-semibold"
-              />
-            </div>
-          </div>
-
           {/* CALCULATION SUMMARY CARD (FORMULA DISPLAY) */}
           <div className="p-3 bg-emerald-50 rounded-lg border border-emerald-200 flex flex-wrap items-center justify-between text-xs font-mono">
             <div>
               <span className="text-slate-600 block text-[11px]">
-                Subtotal (Labor {formatPHP(parsedLabor)} + Parts {formatPHP(totalPartsSelling)} + Other {formatPHP(parsedOther)}):
+                Subtotal:
               </span>
               <strong className="text-slate-800 text-sm">{formatPHP(subtotal)}</strong>
               {computedDiscount > 0 && (
@@ -539,16 +585,22 @@ export const JobModal: React.FC<JobModalProps> = ({
 
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Amount Paid (₱)
+                {totalCollected > 0 ? 'Total Collected (auto, ₱)' : 'Amount Paid (₱)'}
               </label>
               <input
                 type="number"
                 step="any"
-                value={amountPaid}
+                value={totalCollected > 0 ? String(totalCollected) : amountPaid}
                 onChange={(e) => setAmountPaid(e.target.value)}
+                readOnly={totalCollected > 0}
                 placeholder={paymentStatus === 'Paid' ? String(finalTotal) : '0'}
-                className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg font-mono font-semibold"
+                className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg font-mono font-semibold read-only:bg-slate-100 read-only:text-emerald-800"
               />
+              {totalCollected > 0 && (
+                <span className="text-[10px] text-slate-400">
+                  Auto-sum of customer collections
+                </span>
+              )}
             </div>
           </div>
 

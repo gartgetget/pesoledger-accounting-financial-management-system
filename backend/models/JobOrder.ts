@@ -9,6 +9,12 @@ export interface IJobOrder {
   jobNumber: string;
   assignedTechnician: string;
   technicianName: string;
+  area: string;
+  customers: Array<{
+    customerId: string;
+    name: string;
+    amountCollected: number;
+  }>;
   status: "open" | "in_progress" | "completed" | "cancelled";
   paymentStatus: "Paid" | "Partially Paid" | "Unpaid";
   date: Date;
@@ -34,6 +40,8 @@ export interface IJobOrder {
   totalAmount: number;
   amountPaid: number;
   paymentMethodId: string;
+  revenueId: string;
+  expenseId: string;
   notes: string;
   createdBy: string;
   createdAt: Date;
@@ -50,6 +58,14 @@ const jobOrderSchema = new mongoose.Schema<IJobOrder>(
     jobNumber: { type: String, required: true, unique: true },
     assignedTechnician: { type: String, default: "" },
     technicianName: { type: String, default: "" },
+    area: { type: String, default: "" },
+    customers: [
+      {
+        customerId: { type: String, default: "" },
+        name: { type: String, default: "" },
+        amountCollected: { type: Number, default: 0 },
+      },
+    ],
     status: {
       type: String,
       enum: ["open", "in_progress", "completed", "cancelled"],
@@ -85,6 +101,8 @@ const jobOrderSchema = new mongoose.Schema<IJobOrder>(
     totalAmount: { type: Number, default: 0 },
     amountPaid: { type: Number, default: 0 },
     paymentMethodId: { type: String, default: "" },
+    revenueId: { type: String, default: "" },
+    expenseId: { type: String, default: "" },
     notes: { type: String, default: "" },
     createdBy: { type: String, ref: "User" },
     createdAt: { type: Date, default: Date.now },

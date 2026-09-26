@@ -12,6 +12,7 @@ import {
   Wallet,
   CheckCircle2,
   CalendarDays,
+  MapPin,
 } from 'lucide-react';
 import { useAccounting } from '../../context/AccountingContext';
 import { formatPHP, parseNumber } from '../../utils/currency';
@@ -31,6 +32,8 @@ export const DailyAccountingView: React.FC<{
     expenses,
     paymentMethods,
     expenseCategories,
+    areas,
+    serviceJobs,
     addExpense,
     getSummaryForRange,
   } = useAccounting();
@@ -43,6 +46,7 @@ export const DailyAccountingView: React.FC<{
   const [quickDesc, setQuickDesc] = useState('');
   const [quickAmount, setQuickAmount] = useState('');
   const [quickMethod, setQuickMethod] = useState(paymentMethods[0]?.id || 'pm-1');
+  const [quickArea, setQuickArea] = useState('');
 
   useEffect(() => {
     if (expenseCategories.length > 0 && !expenseCategories.some((category) => category.name === quickCategory)) {
@@ -83,6 +87,46 @@ export const DailyAccountingView: React.FC<{
     [selectedDate, revenueTransactions, expenses]
   );
 
+  // Per-area breakdown for the selected day (same shared formula as dashboard / reports)
+  const dailyAreaRows = useMemo(() => {
+    const revByArea: Record<string, number> = {};
+    dailyRevenue.forEach((r) => {
+      const key = r.area || 'Unassigned';
+      revByArea[key] = (revByArea[key] || 0) + (r.amount || 0);
+    });
+
+    const costByArea: Record<string, number> = {};
+    serviceJobs
+      .filter((j) => j.date === selectedDate)
+      .forEach((j) => {
+        const key = j.area || 'Unassigned';
+        costByArea[key] = (costByArea[key] || 0) + (j.partsCostAmount || 0);
+      });
+    dailyExpensesList
+      .filter((e) => e.relatedModule !== 'salary')
+      .forEach((e) => {
+        const key = e.area || 'Unassigned';
+        costByArea[key] = (costByArea[key] || 0) + (e.amount || 0);
+      });
+
+    const names = Array.from(
+      new Set([...areas.map((a) => a.name), ...Object.keys(revByArea), ...Object.keys(costByArea)])
+    );
+    const rows = names
+      .map((name) => ({
+        name,
+        collections: revByArea[name] || 0,
+        costs: costByArea[name] || 0,
+      }))
+      .sort((a, b) => b.collections - a.collections || b.costs - a.costs);
+
+    return {
+      rows,
+      totalCollections: rows.reduce((s, r) => s + r.collections, 0),
+      totalCosts: rows.reduce((s, r) => s + r.costs, 0),
+    };
+  }, [dailyRevenue, dailyExpensesList, serviceJobs, selectedDate, areas]);
+
   const handleQuickAddExpense = (e: React.FormEvent) => {
     e.preventDefault();
     const amt = parseNumber(quickAmount);
@@ -94,11 +138,13 @@ export const DailyAccountingView: React.FC<{
       description: quickDesc.trim(),
       amount: amt,
       paymentMethodId: quickMethod,
+      area: quickArea,
       relatedModule: 'daily',
     });
 
     setQuickDesc('');
     setQuickAmount('');
+    setQuickArea('');
   };
 
   const getMethodName = (pmId: string) => {
@@ -253,7 +299,7 @@ export const DailyAccountingView: React.FC<{
           <span className="text-[11px] text-slate-400">Instantly posts to General Ledger</span>
         </div>
 
-        <form onSubmit={handleQuickAddExpense} className="grid grid-cols-1 sm:grid-cols-5 gap-2.5">
+        <form onSubmit={handleQuickAddExpense} className="grid grid-cols-1 sm:grid-cols-6 gap-2.5">
           <div>
             <select
               value={quickCategory}
@@ -291,6 +337,21 @@ export const DailyAccountingView: React.FC<{
               className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg focus:outline-hidden font-mono font-semibold"
               required
             />
+          </div>
+
+          <div>
+            <select
+              value={quickArea}
+              onChange={(e) => setQuickArea(e.target.value)}
+              className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg focus:outline-hidden bg-white"
+            >
+              <option value="">No area</option>
+              {areas.map((a) => (
+                <option key={a.id} value={a.name}>
+                  {a.name}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div>
@@ -398,6 +459,73 @@ export const DailyAccountingView: React.FC<{
               </tbody>
             </table>
           </div>
+        </div>
+      </div>
+
+      {/* PER-AREA BREAKDOWN FOR SELECTED DAY */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
+        <div className="p-4 border-b border-slate-100 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <MapPin className="w-4 h-4 text-indigo-600" />
+            <h3 className="text-xs font-bold text-slate-900">Per-Area Breakdown on {formatDateDisplay(selectedDate)}</h3>
+          </div>
+          <span className="text-[11px] text-slate-500">Collections vs job & tagged expense costs</span>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs font-mono">
+            <thead className="bg-slate-50 text-slate-500 uppercase tracking-wider font-semibold border-b border-slate-200 font-sans">
+              <tr>
+                <th className="py-2.5 px-4">Area</th>
+                <th className="py-2.5 px-4 text-right">Collections</th>
+                <th className="py-2.5 px-4 text-right">Costs</th>
+                <th className="py-2.5 px-4 text-right">Net</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {dailyAreaRows.rows.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="py-8 text-center text-slate-400 font-sans">
+                    No areas or transactions on this date yet.
+                  </td>
+                </tr>
+              ) : (
+                dailyAreaRows.rows.map((row) => {
+                  const net = row.collections - row.costs;
+                  return (
+                    <tr key={row.name} className="hover:bg-slate-50/70">
+                      <td className="py-2.5 px-4 font-sans font-bold text-slate-800">{row.name}</td>
+                      <td className="py-2.5 px-4 text-right text-emerald-700 tabular-nums">
+                        {formatPHP(row.collections)}
+                      </td>
+                      <td className="py-2.5 px-4 text-right text-rose-700 tabular-nums">
+                        {formatPHP(row.costs)}
+                      </td>
+                      <td className={`py-2.5 px-4 text-right font-bold tabular-nums ${net >= 0 ? 'text-slate-900' : 'text-rose-700'}`}>
+                        {formatPHP(net)}
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+            {dailyAreaRows.rows.length > 0 && (
+              <tfoot>
+                <tr className="border-t-2 border-slate-200 font-semibold bg-slate-50">
+                  <td className="py-2.5 px-4 font-sans uppercase text-[10px] tracking-wider text-slate-500">Total</td>
+                  <td className="py-2.5 px-4 text-right text-emerald-800 tabular-nums">
+                    {formatPHP(dailyAreaRows.totalCollections)}
+                  </td>
+                  <td className="py-2.5 px-4 text-right text-rose-800 tabular-nums">
+                    {formatPHP(dailyAreaRows.totalCosts)}
+                  </td>
+                  <td className={`py-2.5 px-4 text-right font-bold tabular-nums ${dailyAreaRows.totalCollections - dailyAreaRows.totalCosts >= 0 ? 'text-slate-900' : 'text-rose-700'}`}>
+                    {formatPHP(dailyAreaRows.totalCollections - dailyAreaRows.totalCosts)}
+                  </td>
+                </tr>
+              </tfoot>
+            )}
+          </table>
         </div>
       </div>
     </div>
