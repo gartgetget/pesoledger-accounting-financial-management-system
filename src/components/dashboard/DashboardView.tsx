@@ -458,7 +458,7 @@ export const DashboardView: React.FC<{
       </div>
 
       {/* SERVICE JOBS, VEHICLE EXPENSES & AREA PANELS */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-4 xl:gap-5">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 xl:gap-5">
         {/* Service Job Orders */}
         <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs">
           <div className="flex items-start justify-between gap-2 mb-4">
@@ -618,7 +618,7 @@ export const DashboardView: React.FC<{
         </div>
 
         {/* Collections and expenses by team */}
-        <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs lg:col-span-2 2xl:col-span-1">
+        <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs lg:col-span-2">
           <div className="flex items-start justify-between gap-2 mb-4">
             <div className="flex min-w-0 flex-1 items-center gap-2">
               <div className="w-8 h-8 shrink-0 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center">
@@ -640,19 +640,19 @@ export const DashboardView: React.FC<{
           <div className="grid grid-cols-3 gap-2 sm:gap-3 mb-4">
             <div className="min-w-0 bg-emerald-50 border border-emerald-100 rounded-lg p-2 sm:p-3">
               <span className="text-[10px] font-semibold text-emerald-600 uppercase tracking-wider block">Collections</span>
-              <p className="whitespace-nowrap text-xs 2xl:text-sm font-bold text-emerald-700 font-mono tabular-nums mt-0.5">
+              <p className="whitespace-nowrap text-xs font-bold text-emerald-700 font-mono tabular-nums mt-0.5">
                 {formatPHP(areaPanel.totalCollections)}
               </p>
             </div>
             <div className="min-w-0 bg-rose-50 border border-rose-100 rounded-lg p-2 sm:p-3">
               <span className="text-[10px] font-semibold text-rose-600 uppercase tracking-wider block">Costs</span>
-              <p className="whitespace-nowrap text-xs 2xl:text-sm font-bold text-rose-700 font-mono tabular-nums mt-0.5">
+              <p className="whitespace-nowrap text-xs font-bold text-rose-700 font-mono tabular-nums mt-0.5">
                 {formatPHP(areaPanel.totalJobCosts)}
               </p>
             </div>
             <div className="min-w-0 bg-slate-100 border border-slate-200 rounded-lg p-2 sm:p-3">
               <span className="text-[10px] font-semibold text-slate-600 uppercase tracking-wider block">Net</span>
-              <p className="whitespace-nowrap text-xs 2xl:text-sm font-bold text-slate-800 font-mono tabular-nums mt-0.5">
+              <p className="whitespace-nowrap text-xs font-bold text-slate-800 font-mono tabular-nums mt-0.5">
                 {formatPHP(areaPanel.totalCollections - areaPanel.totalJobCosts)}
               </p>
             </div>
