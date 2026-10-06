@@ -343,9 +343,10 @@ export const PayrollView: React.FC = () => {
                   onChange={(e) => setNewEmpRole(e.target.value)}
                   className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg bg-white"
                 >
-                  <option value="Senior Technician">Senior Technician</option>
+                  <option value="Technician">Technician</option>
                   <option value="Aircon Technician">Aircon Technician</option>
                   <option value="Washing Machine Tech">Washing Machine Tech</option>
+                  <option value="OJT">OJT</option>
                   <option value="Driver / Logistics">Driver / Logistics</option>
                   <option value="Administrative Staff">Administrative Staff</option>
                   <option value="HR / Auditing Team">HR / Auditing Team</option>
