@@ -4,8 +4,8 @@ export interface IJobOrder {
   workspaceId: string;
   customerId: string;
   customerName: string;
-  serviceCategoryId: string;
-  serviceCategory: string;
+  serviceCategoryId?: string;
+  serviceCategory?: string;
   jobNumber: string;
   assignedTechnician: string;
   technicianName: string;
@@ -14,24 +14,30 @@ export interface IJobOrder {
     customerId: string;
     name: string;
     amountCollected: number;
+    paymentMethodId: string;
+    serviceCategory: string;
+    parts: Array<{
+      sku: string;
+      invoice: string;
+      description: string;
+      price: number;
+    }>;
+    installationMaterials: string;
+    installationMaterialsPrice: number;
+    referral: string;
+    referralAmount: number;
   }>;
   status: "open" | "in_progress" | "completed" | "cancelled";
   paymentStatus: "Paid" | "Partially Paid" | "Unpaid";
   date: Date;
   description: string;
-  laborCost: number;
-  partsUsed: Array<{
-    partId: string;
-    partName?: string;
-    partNumber?: string;
-    qty: number;
-    unitPrice: number;
-    costPrice?: number;
-    totalCost?: number;
-    totalSelling?: number;
+  parts?: Array<{
+    sku: string;
+    invoice: string;
+    description: string;
+    price: number;
   }>;
-  partsAmount: number;
-  partsCostAmount: number;
+  laborCost: number;
   otherCharges: number;
   discountType: "percentage" | "amount";
   discountValue: number;
@@ -64,6 +70,23 @@ const jobOrderSchema = new mongoose.Schema<IJobOrder>(
         customerId: { type: String, default: "" },
         name: { type: String, default: "" },
         amountCollected: { type: Number, default: 0 },
+        paymentMethodId: { type: String, default: "" },
+        serviceCategory: { type: String, default: "" },
+        parts: {
+          type: [
+            {
+              sku: { type: String, default: "" },
+              invoice: { type: String, default: "" },
+              description: { type: String, default: "" },
+              price: { type: Number, min: 0, default: 0 },
+            },
+          ],
+          default: [],
+        },
+        installationMaterials: { type: String, default: "" },
+        installationMaterialsPrice: { type: Number, min: 0, default: 0 },
+        referral: { type: String, default: "" },
+        referralAmount: { type: Number, min: 0, default: 0 },
       },
     ],
     status: {
@@ -78,21 +101,18 @@ const jobOrderSchema = new mongoose.Schema<IJobOrder>(
     },
     date: { type: Date, default: Date.now },
     description: { type: String, default: "" },
+    parts: {
+      type: [
+        {
+          sku: { type: String, default: "" },
+          invoice: { type: String, default: "" },
+          description: { type: String, default: "" },
+          price: { type: Number, min: 0, default: 0 },
+        },
+      ],
+      default: [],
+    },
     laborCost: { type: Number, default: 0 },
-    partsUsed: [
-      {
-        partId: { type: String, ref: "InventoryItem" },
-        partName: String,
-        partNumber: String,
-        qty: Number,
-        unitPrice: Number,
-        costPrice: Number,
-        totalCost: Number,
-        totalSelling: Number,
-      },
-    ],
-    partsAmount: { type: Number, default: 0 },
-    partsCostAmount: { type: Number, default: 0 },
     otherCharges: { type: Number, default: 0 },
     discountType: { type: String, enum: ["percentage", "amount"], default: "percentage" },
     discountValue: { type: Number, default: 0 },

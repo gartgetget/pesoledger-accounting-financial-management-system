@@ -12,6 +12,12 @@ interface ExpenseModalProps {
   defaultCategory?: string;
 }
 
+interface ExpenseLine {
+  category: string;
+  amount: string;
+  paymentMethodId: string;
+}
+
 export const ExpenseModal: React.FC<ExpenseModalProps> = ({
   isOpen,
   onClose,
@@ -23,21 +29,29 @@ export const ExpenseModal: React.FC<ExpenseModalProps> = ({
     paymentMethods,
     employees,
     areas,
-    addExpense,
+    addExpensesBatch,
     updateExpense,
   } = useAccounting();
 
   const [date, setDate] = useState(editItem ? editItem.date : getTodayDateString());
-  const [category, setCategory] = useState(
-    editItem
-      ? editItem.category
-      : defaultCategory || expenseCategories[0]?.name || 'GAS'
-  );
+  const [expenseLines, setExpenseLines] = useState<ExpenseLine[]>(() => {
+    const firstCategory = editItem?.category || defaultCategory || expenseCategories[0]?.name || '';
+    const secondCategory = expenseCategories.find((category) => category.name !== firstCategory)?.name || firstCategory;
+    const defaultPaymentMethod = editItem?.paymentMethodId || paymentMethods[0]?.id || '';
+    return [
+      {
+        category: firstCategory,
+        amount: editItem ? String(editItem.amount) : '',
+        paymentMethodId: defaultPaymentMethod,
+      },
+      {
+        category: secondCategory,
+        amount: '',
+        paymentMethodId: paymentMethods[0]?.id || '',
+      },
+    ];
+  });
   const [description, setDescription] = useState(editItem ? editItem.description : '');
-  const [amount, setAmount] = useState<string>(editItem ? String(editItem.amount) : '');
-  const [paymentMethodId, setPaymentMethodId] = useState(
-    editItem ? editItem.paymentMethodId : paymentMethods[0]?.id || 'pm-1'
-  );
   const [vendorSupplier, setVendorSupplier] = useState(editItem ? editItem.vendorSupplier || '' : '');
   const [area, setArea] = useState(editItem ? editItem.area || '' : '');
   const [employeeId, setEmployeeId] = useState(editItem ? editItem.employeeId || '' : '');
@@ -48,39 +62,64 @@ export const ExpenseModal: React.FC<ExpenseModalProps> = ({
 
   if (!isOpen) return null;
 
-  const parsedAmount = parseNumber(amount);
+  const updateExpenseLine = (index: number, updates: Partial<ExpenseLine>) => {
+    setExpenseLines((current) =>
+      current.map((line, lineIndex) => lineIndex === index ? { ...line, ...updates } : line)
+    );
+  };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!date || !category || parsedAmount <= 0 || !paymentMethodId) {
-      alert('Please fill in all required fields (Date, Category, Amount, Payment Method).');
+    const parsedLines = expenseLines.slice(0, editItem ? 1 : 2).map((line) => ({
+      ...line,
+      parsedAmount: parseNumber(line.amount),
+    }));
+    if (!date || parsedLines.some((line) => !line.category || line.parsedAmount <= 0 || !line.paymentMethodId)) {
+      alert(editItem
+        ? 'Please fill in the expense category, amount, and payment method.'
+        : 'Please fill in both expense categories, amounts, and payment methods.');
       return;
     }
 
     const assignedEmp = employees.find((emp) => emp.id === employeeId);
 
-    const payload = {
-      date,
-      category: category.toUpperCase(),
-      description: description.trim() || `${category} Expense`,
-      amount: parsedAmount,
-      paymentMethodId,
-      area,
-      vendorSupplier: vendorSupplier.trim(),
-      employeeId: assignedEmp?.id,
-      employeeName: assignedEmp?.name,
-      referenceNumber: referenceNumber.trim(),
-      notes: notes.trim(),
-      relatedModule: 'general' as const,
-    };
-
-    if (editItem) {
-      updateExpense(editItem.id, payload);
-    } else {
-      addExpense(payload);
+    try {
+      if (editItem) {
+        const line = parsedLines[0];
+        await updateExpense(editItem.id, {
+          date,
+          category: line.category.toUpperCase(),
+          description: description.trim() || `${line.category} Expense`,
+          amount: line.parsedAmount,
+          paymentMethodId: line.paymentMethodId,
+          area,
+          vendorSupplier: vendorSupplier.trim(),
+          employeeId: assignedEmp?.id,
+          employeeName: assignedEmp?.name,
+          referenceNumber: referenceNumber.trim(),
+          notes: notes.trim(),
+          relatedModule: 'general',
+        });
+      } else {
+        await addExpensesBatch(parsedLines.map((line) => ({
+          date,
+          category: line.category.toUpperCase(),
+          description: description.trim() || `${line.category} Expense`,
+          amount: line.parsedAmount,
+          paymentMethodId: line.paymentMethodId,
+          area,
+          vendorSupplier: vendorSupplier.trim(),
+          employeeId: assignedEmp?.id,
+          employeeName: assignedEmp?.name,
+          referenceNumber: referenceNumber.trim(),
+          notes: notes.trim(),
+          relatedModule: 'general' as const,
+        })));
+      }
+      onClose();
+    } catch {
+      // The accounting context reports the failed save; keep the form open for correction/retry.
     }
-
-    onClose();
   };
 
   return (
@@ -115,29 +154,68 @@ export const ExpenseModal: React.FC<ExpenseModalProps> = ({
                 required
               />
             </div>
+          </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Expense Category <span className="text-rose-500">*</span>
-              </label>
-              <select
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
-                className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg focus:ring-1 focus:ring-rose-500 focus:outline-hidden bg-white"
-                required
-              >
-                {expenseCategories.map((cat) => (
-                  <option key={cat.id} value={cat.name}>
-                    {cat.name}
-                  </option>
-                ))}
-              </select>
-            </div>
+          <div className="space-y-3">
+            {expenseLines.slice(0, editItem ? 1 : 2).map((line, index) => (
+              <div key={index} className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <h3 className="mb-2 text-xs font-bold text-slate-800">Expense {index + 1}</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Expense Category <span className="text-rose-500">*</span>
+                    </label>
+                    <select
+                      value={line.category}
+                      onChange={(e) => updateExpenseLine(index, { category: e.target.value })}
+                      className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg focus:ring-1 focus:ring-rose-500 focus:outline-hidden bg-white"
+                      required
+                    >
+                      <option value="">Select category</option>
+                      {expenseCategories.map((cat) => (
+                        <option key={cat.id} value={cat.name}>{cat.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Amount (₱ PHP) <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="number"
+                      min="0.01"
+                      step="any"
+                      value={line.amount}
+                      onChange={(e) => updateExpenseLine(index, { amount: e.target.value })}
+                      placeholder="0.00"
+                      className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg focus:ring-1 focus:ring-rose-500 focus:outline-hidden font-mono text-rose-700 font-bold"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Payment Method <span className="text-rose-500">*</span>
+                    </label>
+                    <select
+                      value={line.paymentMethodId}
+                      onChange={(e) => updateExpenseLine(index, { paymentMethodId: e.target.value })}
+                      className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg focus:ring-1 focus:ring-rose-500 focus:outline-hidden bg-white"
+                      required
+                    >
+                      <option value="">Select payment method</option>
+                      {paymentMethods.map((method) => (
+                        <option key={method.id} value={method.id}>{method.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
 
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1">
-              Particulars / Description <span className="text-rose-500">*</span>
+              Customer Name / Description <span className="text-rose-500">*</span>
             </label>
             <input
               type="text"
@@ -147,41 +225,6 @@ export const ExpenseModal: React.FC<ExpenseModalProps> = ({
               className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg focus:ring-1 focus:ring-rose-500 focus:outline-hidden"
               required
             />
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Amount (₱ PHP) <span className="text-rose-500">*</span>
-              </label>
-              <input
-                type="number"
-                step="any"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                placeholder="0.00"
-                className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg focus:ring-1 focus:ring-rose-500 focus:outline-hidden font-mono text-rose-700 font-bold"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Payment Method <span className="text-rose-500">*</span>
-              </label>
-              <select
-                value={paymentMethodId}
-                onChange={(e) => setPaymentMethodId(e.target.value)}
-                className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg focus:ring-1 focus:ring-rose-500 focus:outline-hidden bg-white"
-                required
-              >
-                {paymentMethods.map((pm) => (
-                  <option key={pm.id} value={pm.id}>
-                    {pm.name}
-                  </option>
-                ))}
-              </select>
-            </div>
           </div>
 
           <div>

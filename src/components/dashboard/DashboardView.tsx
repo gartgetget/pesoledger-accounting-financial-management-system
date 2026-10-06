@@ -150,12 +150,6 @@ export const DashboardView: React.FC<{
       });
 
     const costByArea: Record<string, number> = {};
-    serviceJobs
-      .filter((j) => isDateInRange(j.date, dateRange))
-      .forEach((j) => {
-        const key = j.area || 'Unassigned';
-        costByArea[key] = (costByArea[key] || 0) + (j.partsCostAmount || 0);
-      });
     expenses
       .filter((e) => !e.isVoid && isDateInRange(e.date, dateRange) && e.relatedModule !== 'salary')
       .forEach((e) => {
@@ -179,7 +173,7 @@ export const DashboardView: React.FC<{
       totalCollections: rows.reduce((s, r) => s + r.collections, 0),
       totalJobCosts: rows.reduce((s, r) => s + r.jobCosts, 0),
     };
-  }, [revenueTransactions, serviceJobs, expenses, dateRange, areas]);
+  }, [revenueTransactions, expenses, dateRange, areas]);
 
   // 3. Combined Recent Transactions List
   const recentTransactions = useMemo(() => {
@@ -405,7 +399,7 @@ export const DashboardView: React.FC<{
       </div>
 
       {/* CORE OBJECTIVE 2 (PART B): Total Breakdown Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-8 gap-3">
         <div className="bg-white p-3.5 rounded-lg border border-slate-200">
           <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">Total Collections</span>
           <p className="text-sm font-bold text-slate-900 font-mono tabular-nums mt-1">
@@ -424,6 +418,13 @@ export const DashboardView: React.FC<{
           <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">Parts Cost</span>
           <p className="text-sm font-bold text-amber-700 font-mono tabular-nums mt-1">
             {formatPHP(financialSummary.partsExpense)}
+          </p>
+        </div>
+
+        <div className="bg-white p-3.5 rounded-lg border border-slate-200">
+          <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">Referral Expense</span>
+          <p className="text-sm font-bold text-rose-700 font-mono tabular-nums mt-1">
+            {formatPHP(financialSummary.referralExpense)}
           </p>
         </div>
 
@@ -616,7 +617,7 @@ export const DashboardView: React.FC<{
           )}
         </div>
 
-        {/* Collections by Area */}
+        {/* Collections and expenses by team */}
         <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
@@ -624,8 +625,8 @@ export const DashboardView: React.FC<{
                 <MapPin className="w-4 h-4" />
               </div>
               <div>
-                <h3 className="text-sm font-bold text-slate-900">Collections by Area</h3>
-                <p className="text-xs text-slate-500">Collections vs job & tagged expense costs per area in period</p>
+                <h3 className="text-sm font-bold text-slate-900">Collections & Expenses by Team</h3>
+                <p className="text-xs text-slate-500">Revenue and recorded expenses by team/area for this period</p>
               </div>
             </div>
             <button
@@ -666,9 +667,9 @@ export const DashboardView: React.FC<{
               <table className="w-full text-left text-xs">
                 <thead className="text-slate-400 uppercase tracking-wider font-semibold border-b border-slate-100">
                   <tr>
-                    <th className="py-2 pr-3">Area</th>
+                    <th className="py-2 pr-3">Team / Area</th>
                     <th className="py-2 pr-3 text-right">Collections</th>
-                    <th className="py-2 pr-3 text-right">Costs</th>
+                    <th className="py-2 pr-3 text-right">Expenses</th>
                     <th className="py-2 text-right">Net</th>
                   </tr>
                 </thead>

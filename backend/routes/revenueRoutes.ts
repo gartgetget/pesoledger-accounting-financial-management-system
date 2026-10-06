@@ -1,6 +1,7 @@
 import { createRouter } from "../middleware/createRouter.js";
 import RevenueEntry from "../models/RevenueEntry.js";
 import JobOrder from "../models/JobOrder.js";
+import { getJobRevenueLines } from "../jobRevenue.js";
 import auth from "../middleware/auth.js";
 
 const router = createRouter();
@@ -94,10 +95,19 @@ router.delete("/:workspaceId/revenue/:id", ensureWorkspaceAccess, async (req, re
       job.revenueId = "";
       job.customers = (job.customers || []).map((c: any) => ({ ...c, amountCollected: 0 }));
       job.updatedAt = new Date();
+      const retainedMaterialRevenue = job.status === "cancelled" ? [] : getJobRevenueLines(job);
+      await RevenueEntry.deleteMany({ workspaceId, relatedId: job._id.toString() });
+      if (retainedMaterialRevenue.length > 0) {
+        const restoredEntries = await RevenueEntry.insertMany(
+          retainedMaterialRevenue.map((line) => ({ workspaceId, ...line, relatedId: job._id.toString(), createdBy: req.user._id.toString() })),
+        );
+        job.revenueId = restoredEntries[0]._id.toString();
+      }
       await job.save();
+      return res.json({ message: "Job collections deleted; installation-material revenue retained" });
     }
     await entry.deleteOne();
-    return res.json({ message: "Collection deleted; linked job order marked unpaid" });
+    return res.json({ message: "Revenue entry deleted" });
   }
 
   await entry.deleteOne();

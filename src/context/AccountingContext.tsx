@@ -9,7 +9,6 @@ import {
   Customer,
   Employee,
   Expense,
-  Part,
   PaymentMethodItem,
   PayrollRecord,
   RevenueTransaction,
@@ -17,6 +16,7 @@ import {
   UserRole,
   Vehicle,
   VehicleExpense,
+  Part,
 } from '../types';
 import {
   DateFilterRange,
@@ -25,6 +25,7 @@ import {
   getTodayDateString,
   getMonthName,
   isDateInRange,
+  formatDateString,
 } from '../utils/date';
 import { ImportInspectionResult } from '../utils/excel';
 import { useAuth, BackendUser, BackendWorkspace } from './AuthContext';
@@ -44,12 +45,13 @@ const emptyCompanySettings: CompanySettings = {
 
 const defaultExpenseCategories: CategoryItem[] = [
   'GAS','SALARY','DAILY EXPENSES & SAVINGS','SASAKYAN','SHOP RENT',
-  'FOOD ALLOWANCE','INCENTIVES','PERFECT ATTENDANCE','OT PAY','MOTOR','OTHER DEDUCTIONS','PARTS','OTHER EXPENSES',
+  'FOOD ALLOWANCE','INCENTIVES','PERFECT ATTENDANCE','OT PAY','MOTOR','OTHER DEDUCTIONS','OTHER EXPENSES',
+  'PARTS / MATERIALS','REFERRAL',
 ].map((name, index) => ({ id: `cat-exp-default-${index + 1}`, name, isDefault: true }));
 
 export interface FinancialSummary {
   totalRevenue: number; totalExpenses: number; netIncome: number; netMarginPercent: number;
-  totalTransactionsCount: number; partsExpense: number; salaryExpense: number;
+  totalTransactionsCount: number; partsExpense: number; referralExpense: number; salaryExpense: number;
   gasExpense: number; sasakyanExpense: number; dailyExpenses: number; otherExpenses: number;
   revenueByCategory: Record<string, number>; expensesByCategory: Record<string, number>;
   revenueByPaymentMethod: Record<string, number>; expensesByPaymentMethod: Record<string, number>;
@@ -76,17 +78,19 @@ export interface AccountingContextType {
   updateRevenueTransaction: (id: string, updates: Partial<RevenueTransaction>) => void;
   voidRevenueTransaction: (id: string) => void;
   addExpense: (data: Omit<Expense, 'id' | 'createdAt'>) => Promise<string>;
+  addExpensesBatch: (data: Array<Omit<Expense, 'id' | 'createdAt'>>) => Promise<void>;
   updateExpense: (id: string, updates: Partial<Expense>) => void; voidExpense: (id: string) => void;
+  addPart: (part: Omit<Part, 'id'>) => void; updatePart: (id: string, updates: Partial<Part>) => void; deletePart: (id: string) => void; restockPart: (id: string, qty: number) => void;
   createServiceJob: (job: Omit<ServiceJob, 'id' | 'createdAt'>) => Promise<string | null>;
-  updateServiceJob: (id: string, updates: Partial<ServiceJob>) => void; deleteServiceJob: (id: string) => void;
+  updateServiceJob: (id: string, updates: Partial<ServiceJob>) => Promise<boolean>; deleteServiceJob: (id: string) => void;
+  syncJobOrderLedger: () => Promise<number>;
   addEmployee: (employee: Omit<Employee, 'id'>) => void; updateEmployee: (id: string, updates: Partial<Employee>) => void;
   deleteEmployee: (id: string) => void; processPayroll: (record: Omit<PayrollRecord, 'id' | 'createdAt'>) => void;
   updatePayroll: (id: string, record: Partial<PayrollRecord>) => void; deletePayroll: (id: string) => void;
   addVehicle: (vehicle: Omit<Vehicle, 'id'>) => void; updateVehicle: (id: string, updates: Partial<Vehicle>) => void;
   deleteVehicle: (id: string) => void; addVehicleExpense: (vexp: Omit<VehicleExpense, 'id'>) => Promise<boolean>;
+  addVehicleExpensesBatch: (vexp: Omit<VehicleExpense, 'id'>[]) => Promise<boolean>;
   deleteVehicleExpense: (id: string) => void;
-  addPart: (part: Omit<Part, 'id'>) => void; updatePart: (id: string, updates: Partial<Part>) => void;
-  deletePart: (id: string) => void; restockPart: (partId: string, quantityToAdd: number, unitCostPrice?: number) => void;
   addCustomer: (customer: Omit<Customer, 'id' | 'createdAt'>) => Promise<string>;
   updateCustomer: (id: string, updates: Partial<Customer>) => void; deleteCustomer: (id: string) => void;
   addServiceCategory: (name: string, description?: string) => void;
@@ -148,39 +152,117 @@ function mapBackendExpense(entry: any): Expense {
 }
 
 function mapBackendJob(order: any): ServiceJob {
-  const partsUsed = Array.isArray(order.partsUsed)
-    ? order.partsUsed.map((p: any) => ({
-        partId: p.partId || p._id || '',
-        partName: p.partName || '',
-        partNumber: p.partNumber || '',
-        quantity: Number(p.qty ?? p.quantity ?? 1),
-        costPrice: Number(p.costPrice ?? p.unitPrice ?? 0),
-        sellingPrice: Number(p.unitPrice ?? p.totalSelling ?? 0),
-        totalCost: Number(p.totalCost ?? 0),
-        totalSelling: Number(p.totalSelling ?? (Number(p.unitPrice ?? 0) * Number(p.qty ?? 1))),
+  const legacyParts = Array.isArray(order.parts)
+    ? order.parts.map((part: any) => ({
+        sku: String(part.sku || ''),
+        invoice: String(part.invoice || ''),
+        description: String(part.description || ''),
+        price: Number(part.price || 0),
       }))
     : [];
-  const labor = Number(order.laborCost ?? order.laborAmount ?? 0);
-  const total = Number(order.totalAmount ?? order.total ?? 0);
+  const mapCustomer = (customer: any) => ({
+    customerId: customer.customerId || '',
+    name: customer.name || '',
+    amountCollected: Number(customer.amountCollected || 0),
+    paymentMethodId: customer.paymentMethodId || order.paymentMethodId || '',
+    serviceCategory: customer.serviceCategory || order.serviceCategory || order.serviceCategoryId || '',
+    parts: Array.isArray(customer.parts)
+      ? customer.parts.map((part: any) => ({
+          sku: String(part.sku || ''),
+          invoice: String(part.invoice || ''),
+          description: String(part.description || ''),
+          price: Number(part.price || 0),
+        }))
+      : [],
+    installationMaterials: customer.installationMaterials || '',
+    installationMaterialsPrice: Number(customer.installationMaterialsPrice || 0),
+    referral: customer.referral || '',
+    referralAmount: Number(customer.referralAmount || 0),
+  });
+  const mappedCustomers = Array.isArray(order.customers)
+    ? order.customers.map(mapCustomer)
+    : [];
+  if (!mappedCustomers.length && (
+    order.customerName ||
+    order.customerId ||
+    legacyParts.length ||
+    order.installationMaterials ||
+    order.installationMaterialsPrice ||
+    order.referral ||
+    order.referralAmount ||
+    order.referralCost
+  )) {
+    mappedCustomers.push(mapCustomer({
+      customerId: order.customerId || '',
+      name: order.customerName || '',
+      amountCollected: order.amountPaid || 0,
+      parts: legacyParts,
+      installationMaterials: order.installationMaterials || '',
+      installationMaterialsPrice: order.installationMaterialsPrice ?? order.installationPrice ?? 0,
+      referral: order.referral || '',
+      referralAmount: order.referralAmount ?? order.referralCost ?? 0,
+    }));
+  } else if (mappedCustomers.length > 0) {
+    const firstCustomer = mappedCustomers[0];
+    if (firstCustomer.parts.length === 0 && legacyParts.length > 0) {
+      firstCustomer.parts = legacyParts;
+    }
+    if (
+      mappedCustomers.every((customer) => customer.installationMaterialsPrice <= 0) &&
+      Number(order.installationMaterialsPrice ?? order.installationPrice ?? 0) > 0
+    ) {
+      firstCustomer.installationMaterials = firstCustomer.installationMaterials || order.installationMaterials || '';
+      firstCustomer.installationMaterialsPrice = Number(order.installationMaterialsPrice ?? order.installationPrice);
+    }
+    if (
+      mappedCustomers.every((customer) => customer.referralAmount <= 0) &&
+      Number(order.referralAmount ?? order.referralCost ?? 0) > 0
+    ) {
+      firstCustomer.referral = firstCustomer.referral || order.referral || '';
+      firstCustomer.referralAmount = Number(order.referralAmount ?? order.referralCost);
+    }
+  }
+  const customerBill = mappedCustomers.reduce(
+    (sum, customer) => sum + customer.amountCollected + customer.installationMaterialsPrice,
+    0,
+  );
+  const calculatedSubtotal = mappedCustomers.length > 0
+    ? customerBill
+    : Number(order.amountPaid || order.subtotal || order.totalAmount || 0);
+  const subtotal = calculatedSubtotal;
+  const discountType = order.discountType === 'amount' ? 'amount' : 'percentage';
+  const discountValue = Number(order.discountValue ?? 0);
+  const requestedDiscount = discountType === 'percentage'
+    ? subtotal * discountValue / 100
+    : discountValue;
+  const calculatedDiscount = Math.min(subtotal, Math.max(0, requestedDiscount));
+  const total = Math.max(0, subtotal - calculatedDiscount);
+  const amountPaid = mappedCustomers.length > 0 ? customerBill : Number(order.amountPaid) || 0;
+  const paymentStatus: ServiceJob['paymentStatus'] =
+    total > 0 && amountPaid >= total
+      ? 'Paid'
+      : amountPaid > 0
+        ? 'Partially Paid'
+        : 'Unpaid';
   return {
     id: order._id || order.id, jobNumber: order.jobNumber || `JOB-${order._id?.slice(-6) || Date.now()}`,
     customerId: order.customerId || '', customerName: order.customerName || '',
-    date: order.date ? String(order.date).split('T')[0] : new Date().toISOString().split('T')[0],
+    date: order.date ? String(order.date).split('T')[0] : formatDateString(new Date()),
     technicianId: order.assignedTechnician || order.technicianId || '', technicianName: order.technicianName || '',
-    serviceCategory: order.serviceCategory || order.serviceCategoryId || '', description: order.description || '',
-    laborAmount: labor, partsUsed, partsAmount: Number(order.partsAmount ?? 0), partsCostAmount: Number(order.partsCostAmount ?? 0),
-    otherCharges: Number(order.otherCharges ?? 0),
-    discountType: order.discountType === 'amount' ? 'amount' : 'percentage',
-    discountValue: Number(order.discountValue ?? 0), discountAmount: Number(order.discountAmount ?? 0),
-    subtotal: Number(order.subtotal ?? total), total,
-    amountPaid: Number(order.amountPaid ?? 0), paymentMethodId: order.paymentMethodId || '',
-    paymentStatus: (order.paymentStatus as ServiceJob['paymentStatus']) || 'Unpaid',
+    description: order.description || '',
+    laborAmount: 0,
+    otherCharges: 0,
+    discountType,
+    discountValue, discountAmount: calculatedDiscount,
+    subtotal, total,
+    amountPaid, paymentMethodId: order.paymentMethodId || '',
+    paymentStatus,
     status: (order.status as ServiceJob['status']) || 'open',
     notes: order.notes || '', revenueId: order.revenueId || undefined, expenseId: order.expenseId || undefined,
+    jobPartsExpense: Number(order.jobPartsExpense) || 0,
+    jobReferralExpense: Number(order.jobReferralExpense) || 0,
     area: order.area || '',
-    customers: Array.isArray(order.customers)
-      ? order.customers.map((c: any) => ({ customerId: c.customerId || '', name: c.name || '', amountCollected: Number(c.amountCollected || 0) }))
-      : [],
+    customers: mappedCustomers,
     createdAt: order.createdAt || new Date().toISOString(),
   };
 }
@@ -272,13 +354,12 @@ export const AccountingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       setIsLoadingData(true);
       try {
         const wsId = activeWorkspaceId;
-        const [revData, expData, custData, jobData, catData, invData, payData, vehData, vexpData, empData, pmData, areaData] = await Promise.all([
+        const [revData, expData, custData, jobData, catData, payData, vehData, vexpData, empData, pmData, areaData] = await Promise.all([
           api.get<any[]>(`/api/${wsId}/revenue`).catch(() => []),
           api.get<any[]>(`/api/${wsId}/expenses`).catch(() => []),
           api.get<any[]>(`/api/${wsId}/customers`).catch(() => []),
           api.get<any[]>(`/api/${wsId}/job-orders`).catch(() => []),
           api.get<any[]>(`/api/${wsId}/categories`).catch(() => []),
-          api.get<any[]>(`/api/${wsId}/inventory`).catch(() => []),
           api.get<any[]>(`/api/${wsId}/payroll`).catch(() => []),
           api.get<any[]>(`/api/${wsId}/vehicles`).catch(() => []),
           api.get<any[]>(`/api/${wsId}/vehicle-expenses`).catch(() => []),
@@ -293,7 +374,6 @@ export const AccountingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         setServiceCategories(catData.filter((c: any) => c.type === 'service').map((c: any) => ({ id: c._id, name: c.name, description: c.description, isDefault: false })));
         setRevenueCategories(catData.filter((c: any) => c.type === 'revenue').map((c: any) => ({ id: c._id, name: c.name, description: c.description, isDefault: false })));
         setExpenseCategories(catData.filter((c: any) => c.type === 'expense').map((c: any) => ({ id: c._id, name: c.name, description: c.description, isDefault: false })));
-        setParts(invData.map((p: any) => ({ id: p._id, partNumber: p.sku, name: p.partName, category: p.category || '', description: '', supplier: '', standardPrice: p.unitPrice, costPrice: p.unitPrice, sellingPrice: p.unitPrice, quantity: p.stock, minimumStock: p.reorderLevel, dateAdded: p.createdAt })));
         setPayrollRecords(payData.map(mapBackendPayroll));
         setVehicles(vehData.map((v: any) => ({ ...v, id: v._id })));
         setVehicleExpenses(vexpData.map(mapBackendVehicleExpense));
@@ -313,13 +393,12 @@ export const AccountingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     if (!activeWorkspaceId || !authIsAuthenticated) return;
     try {
       const wsId = activeWorkspaceId;
-      const [revData, expData, custData, jobData, catData, invData, payData, vehData, vexpData, empData, pmData, areaData] = await Promise.all([
+      const [revData, expData, custData, jobData, catData, payData, vehData, vexpData, empData, pmData, areaData] = await Promise.all([
         api.get<any[]>(`/api/${wsId}/revenue`).catch(() => []),
         api.get<any[]>(`/api/${wsId}/expenses`).catch(() => []),
         api.get<any[]>(`/api/${wsId}/customers`).catch(() => []),
         api.get<any[]>(`/api/${wsId}/job-orders`).catch(() => []),
         api.get<any[]>(`/api/${wsId}/categories`).catch(() => []),
-        api.get<any[]>(`/api/${wsId}/inventory`).catch(() => []),
         api.get<any[]>(`/api/${wsId}/payroll`).catch(() => []),
         api.get<any[]>(`/api/${wsId}/vehicles`).catch(() => []),
         api.get<any[]>(`/api/${wsId}/vehicle-expenses`).catch(() => []),
@@ -334,7 +413,6 @@ export const AccountingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       setServiceCategories(catData.filter((c: any) => c.type === 'service').map((c: any) => ({ id: c._id, name: c.name, description: c.description, isDefault: false })));
       setRevenueCategories(catData.filter((c: any) => c.type === 'revenue').map((c: any) => ({ id: c._id, name: c.name, description: c.description, isDefault: false })));
       setExpenseCategories(catData.filter((c: any) => c.type === 'expense').map((c: any) => ({ id: c._id, name: c.name, description: c.description, isDefault: false })));
-      setParts(invData.map((p: any) => ({ id: p._id, partNumber: p.sku, name: p.partName, category: p.category || '', description: '', supplier: '', standardPrice: p.unitPrice, costPrice: p.unitPrice, sellingPrice: p.unitPrice, quantity: p.stock, minimumStock: p.reorderLevel, dateAdded: p.createdAt })));
       setPayrollRecords(payData.map(mapBackendPayroll));
       setVehicles(vehData.map((v: any) => ({ ...v, id: v._id })));
       setVehicleExpenses(vexpData.map(mapBackendVehicleExpense));
@@ -343,6 +421,99 @@ export const AccountingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       setAreas(areaData.map((a: any) => ({ id: a._id, name: a.name })));
     } catch (e) {
       console.error('Failed to refetch workspace data', e);
+    }
+  };
+
+  const syncJobOrderLedger = async (): Promise<number> => {
+    if (!activeWorkspaceId || !authIsAuthenticated) {
+      throw new Error('Select an active workspace before syncing job orders');
+    }
+    try {
+      let after: string | undefined;
+      let synced = 0;
+      let referralTotal = 0;
+      let partsMaterialsTotal = 0;
+      try {
+        do {
+          const result = await api.post<{
+            synced: number;
+            nextCursor: string | null;
+            referralTotal: number;
+            partsMaterialsTotal: number;
+          }>(
+            `/api/${activeWorkspaceId}/job-orders/sync-ledger${after ? `?after=${encodeURIComponent(after)}` : ''}`,
+          );
+          synced += result.synced;
+          referralTotal += result.referralTotal || 0;
+          partsMaterialsTotal += result.partsMaterialsTotal || 0;
+          after = result.nextCursor || undefined;
+        } while (after);
+      } catch (syncError) {
+        const isMissingEndpoint =
+          typeof syncError === 'object' &&
+          syncError !== null &&
+          'status' in syncError &&
+          syncError.status === 404;
+        if (!isMissingEndpoint) throw syncError;
+
+        const jobData = await api.get<any[]>(`/api/${activeWorkspaceId}/job-orders`);
+        for (const job of jobData) {
+          const customers = Array.isArray(job.customers) ? job.customers : [];
+          const customerParts = customers.reduce(
+            (sum: number, customer: any) =>
+              sum +
+              (Array.isArray(customer.parts)
+                ? customer.parts.reduce((partSum: number, part: any) => partSum + (Number(part.price) || 0), 0)
+                : 0),
+            0,
+          );
+          const legacyParts = Array.isArray(job.parts)
+            ? job.parts.reduce((sum: number, part: any) => sum + (Number(part.price) || 0), 0)
+            : 0;
+          const customerReferral = customers.reduce(
+            (sum: number, customer: any) => sum + (Number(customer.referralAmount) || 0),
+            0,
+          );
+          const referral = Math.max(
+            customerReferral,
+            Number(job.referralAmount ?? job.referralCost) || 0,
+          );
+          partsMaterialsTotal += customerParts || legacyParts;
+          referralTotal += referral;
+
+          const jobId = job._id || job.id;
+          if (!jobId) throw new Error('Cannot sync a job order without an ID');
+          await api.put(`/api/${activeWorkspaceId}/job-orders/${jobId}`, {
+            ...(Array.isArray(job.customers) ? { customers: job.customers } : {}),
+            ...(job.amountPaid !== undefined ? { amountPaid: Number(job.amountPaid) || 0 } : {}),
+            ...(job.status ? { status: job.status } : {}),
+          });
+          synced += 1;
+        }
+      }
+      const [revData, expData, jobData, catData] = await Promise.all([
+        api.get<any[]>(`/api/${activeWorkspaceId}/revenue`),
+        api.get<any[]>(`/api/${activeWorkspaceId}/expenses`),
+        api.get<any[]>(`/api/${activeWorkspaceId}/job-orders`),
+        api.get<any[]>(`/api/${activeWorkspaceId}/categories`),
+      ]);
+      setRevenueTransactions(revData.map(mapBackendRevenue));
+      setExpenses(expData.map(mapBackendExpense));
+      setServiceJobs(jobData.map(mapBackendJob));
+      setExpenseCategories(catData.filter((category: any) => category.type === 'expense').map((category: any) => ({
+        id: category._id,
+        name: category.name,
+        description: category.description,
+        isDefault: false,
+      })));
+      toast.success(
+        `Synced ${synced} job order${synced === 1 ? '' : 's'} — Referral: ₱${referralTotal.toLocaleString()}, Parts / Materials: ₱${partsMaterialsTotal.toLocaleString()}`,
+      );
+      return synced;
+    } catch (error) {
+      console.error('Failed to reconcile job-order ledger entries', error);
+      toast.error(`Could not reconcile job-order ledgers: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw error;
     }
   };
 
@@ -373,11 +544,13 @@ export const AccountingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     const totalExpenses = validExpenses.reduce((s, e) => s + (e.amount || 0), 0);
     const netIncome = totalRevenue - totalExpenses;
     const netMarginPercent = totalRevenue > 0 ? (netIncome / totalRevenue) * 100 : 0;
-    let partsExpense = 0, salaryExpense = 0, gasExpense = 0, sasakyanExpense = 0, dailyExpenses = 0, otherExpenses = 0;
+    let partsExpense = 0, referralExpense = 0;
+    let salaryExpense = 0, gasExpense = 0, sasakyanExpense = 0, dailyExpenses = 0, otherExpenses = 0;
     const expensesByCategory: Record<string, number> = {};
     validExpenses.forEach((exp) => {
       const cat = exp.category.toUpperCase(); expensesByCategory[cat] = (expensesByCategory[cat] || 0) + exp.amount;
-      if (cat.includes('PARTS')) partsExpense += exp.amount;
+      if (cat.includes('PARTS') || cat.includes('MATERIALS')) partsExpense += exp.amount;
+      else if (cat.includes('REFERRAL')) referralExpense += exp.amount;
       else if (cat.includes('SALARY') || cat.includes('OT PAY')) salaryExpense += exp.amount;
       else if (cat.includes('GAS')) gasExpense += exp.amount;
       else if (cat.includes('SASAKYAN') || cat.includes('MOTOR')) sasakyanExpense += exp.amount;
@@ -398,7 +571,7 @@ export const AccountingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     });
     const allCatNames = Array.from(new Set([...revenueCategories.map((c) => c.name.toUpperCase()), ...expenseCategories.map((c) => c.name.toUpperCase()), ...Object.keys(revenueByCategory), ...Object.keys(expensesByCategory)]));
     const categoryBalances = allCatNames.map((cat) => { const r = revenueByCategory[cat] || 0; const e = expensesByCategory[cat] || 0; const type: 'revenue' | 'expense' | 'both' = r > 0 && e > 0 ? 'both' : r > 0 ? 'revenue' : 'expense'; return { category: cat, type, revenue: r, expenses: e, net: r - e }; });
-    return { totalRevenue, totalExpenses, netIncome, netMarginPercent, totalTransactionsCount: validRevenue.length + validExpenses.length, partsExpense, salaryExpense, gasExpense, sasakyanExpense, dailyExpenses, otherExpenses, revenueByCategory, expensesByCategory, revenueByPaymentMethod, expensesByPaymentMethod, paymentMethodBalances, categoryBalances };
+    return { totalRevenue, totalExpenses, netIncome, netMarginPercent, totalTransactionsCount: validRevenue.length + validExpenses.length, partsExpense, referralExpense, salaryExpense, gasExpense, sasakyanExpense, dailyExpenses, otherExpenses, revenueByCategory, expensesByCategory, revenueByPaymentMethod, expensesByPaymentMethod, paymentMethodBalances, categoryBalances };
   };
 
   const financialSummary = useMemo<FinancialSummary>(() => getSummaryForRange(dateRange), [revenueTransactions, expenses, paymentMethods, dateRange]);
@@ -406,8 +579,8 @@ export const AccountingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const getYearlyMatrix = (year: number) => {
     const result = [];
     for (let m = 0; m < 12; m++) {
-      const start = new Date(year, m, 1).toISOString().split('T')[0];
-      const end = new Date(year, m + 1, 0).toISOString().split('T')[0];
+      const start = formatDateString(new Date(year, m, 1));
+      const end = formatDateString(new Date(year, m + 1, 0));
       const summary = getSummaryForRange({ startDate: start, endDate: end });
       result.push({ monthIndex: m, monthName: getMonthName(m), revenue: summary.totalRevenue, expenses: summary.totalExpenses, netIncome: summary.netIncome });
     }
@@ -456,6 +629,29 @@ export const AccountingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     } catch (e) { console.error(e); return `exp-${Date.now()}`; }
   };
 
+  const addExpensesBatch = async (data: Array<Omit<Expense, 'id' | 'createdAt'>>) => {
+    try {
+      if (!activeWorkspaceId) {
+        throw new Error('Select a workspace before recording expenses');
+      }
+      await api.post(`/api/${activeWorkspaceId}/expenses/batch`, {
+        entries: data.map((entry) => ({
+          ...entry,
+          category: entry.category.toUpperCase(),
+        })),
+      });
+      data.forEach((entry) => {
+        addAudit('CREATE', 'Expenses', `Logged expense ₱${entry.amount.toLocaleString()} [${entry.category}]`);
+      });
+      await refetchAllData();
+      toast.success('Both business expenses recorded');
+    } catch (error) {
+      console.error('Failed to record both business expenses', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to record both business expenses');
+      throw error;
+    }
+  };
+
   const updateExpense = async (id: string, updates: Partial<Expense>) => {
     try {
       await api.put(`/api/${activeWorkspaceId}/expenses/${id}`, updates);
@@ -474,13 +670,27 @@ export const AccountingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     } catch (e) { console.error(e); toast.error('Failed to delete expense'); }
   };
 
+  const addPart = (part: Omit<Part, 'id'>) => {
+    setParts((prev) => [...prev, { ...part, id: `part-${Date.now()}` }]);
+  };
+
+  const updatePart = (id: string, updates: Partial<Part>) => {
+    setParts((prev) => prev.map((part) => (part.id === id ? { ...part, ...updates } : part)));
+  };
+
+  const deletePart = (id: string) => {
+    setParts((prev) => prev.filter((part) => part.id !== id));
+  };
+
+  const restockPart = (id: string, qty: number) => {
+    setParts((prev) => prev.map((part) => (part.id === id ? { ...part, quantity: part.quantity + qty } : part)));
+  };
+
   const createServiceJob = async (jobData: Omit<ServiceJob, 'id' | 'createdAt'>): Promise<string> => {
     try {
-      const result = await api.post<{ _id?: string }>(`/api/${activeWorkspaceId}/job-orders`, {
+      const result = await api.post<{ _id?: string; ledgerSyncErrors?: string[] }>(`/api/${activeWorkspaceId}/job-orders`, {
         customerId: jobData.customerId,
         customerName: jobData.customerName,
-        serviceCategoryId: jobData.serviceCategory,
-        serviceCategory: jobData.serviceCategory,
         jobNumber: jobData.jobNumber,
         assignedTechnician: jobData.technicianId,
         technicianName: jobData.technicianName,
@@ -489,9 +699,6 @@ export const AccountingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         description: jobData.description,
         laborCost: jobData.laborAmount,
         laborAmount: jobData.laborAmount,
-        partsUsed: jobData.partsUsed,
-        partsAmount: jobData.partsAmount,
-        partsCostAmount: jobData.partsCostAmount,
         otherCharges: jobData.otherCharges,
         discountType: jobData.discountType,
         discountValue: jobData.discountValue,
@@ -499,8 +706,12 @@ export const AccountingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         subtotal: jobData.subtotal,
         totalAmount: jobData.total,
         total: jobData.total,
-        amountPaid: jobData.amountPaid,
-        paymentMethodId: jobData.paymentMethodId,
+        amountPaid: jobData.customers?.reduce(
+          (sum, customer) =>
+            sum + (Number(customer.amountCollected) || 0) + (Number(customer.installationMaterialsPrice) || 0),
+          0,
+        ) || 0,
+        paymentMethodId: jobData.customers?.find((customer) => customer.amountCollected > 0)?.paymentMethodId || '',
         paymentStatus: jobData.paymentStatus,
         status: jobData.status || 'open',
         date: jobData.date,
@@ -508,6 +719,11 @@ export const AccountingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       });
       addAudit('CREATE', 'Jobs', `Created service job ${jobData.jobNumber}`);
       await refetchAllData();
+      if (result.ledgerSyncErrors?.length) {
+        toast.error(`Job saved, but ledger posting failed: ${result.ledgerSyncErrors.join('; ')}`);
+      } else {
+        toast.success('Job order created and posted to the ledgers');
+      }
       return result._id || `job-${Date.now()}`;
     } catch (e) {
       console.error(e);
@@ -516,17 +732,26 @@ export const AccountingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     }
   };
 
-  const updateServiceJob = async (id: string, updates: Partial<ServiceJob>) => {
+  const updateServiceJob = async (id: string, updates: Partial<ServiceJob>): Promise<boolean> => {
     try {
       const payload: Record<string, unknown> = { ...updates };
       if (updates.laborAmount !== undefined) payload.laborCost = updates.laborAmount;
       if (updates.total !== undefined) payload.totalAmount = updates.total;
       if (updates.technicianId !== undefined) payload.assignedTechnician = updates.technicianId;
-      await api.put(`/api/${activeWorkspaceId}/job-orders/${id}`, payload);
+      const result = await api.put<{ ledgerSyncErrors?: string[] }>(`/api/${activeWorkspaceId}/job-orders/${id}`, payload);
       addAudit('UPDATE', 'Jobs', `Updated service job ${updates.jobNumber || id}`);
-      toast.success('Job order updated');
       await refetchAllData();
-    } catch (e) { console.error(e); toast.error('Failed to update job order'); }
+      if (result.ledgerSyncErrors?.length) {
+        toast.error(`Job updated, but ledger synchronization failed: ${result.ledgerSyncErrors.join('; ')}`);
+      } else {
+        toast.success('Job order and ledgers updated');
+      }
+      return true;
+    } catch (e) {
+      console.error(e);
+      toast.error(e instanceof Error ? e.message : 'Failed to update job order');
+      return false;
+    }
   };
 
   const deleteServiceJob = async (id: string) => {
@@ -676,6 +901,48 @@ export const AccountingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     }
   };
 
+  const addVehicleExpensesBatch = async (vexp: Omit<VehicleExpense, 'id'>[]): Promise<boolean> => {
+    try {
+      if (!activeWorkspaceId || vexp.length !== 2) {
+        throw new Error('Select a workspace and provide exactly two vehicle expenses');
+      }
+      const [first, second] = vexp;
+      if (
+        first.vehicleId !== second.vehicleId ||
+        first.date !== second.date ||
+        first.area !== second.area ||
+        first.driverResponsible !== second.driverResponsible
+      ) {
+        throw new Error('Both vehicle expense lines must belong to the same vehicle, date, area, and driver');
+      }
+      await api.post(`/api/${activeWorkspaceId}/vehicle-expenses/batch`, {
+        vehicleId: first.vehicleId,
+        vehicleName: first.vehicleName,
+        date: first.date,
+        area: first.area || '',
+        driverResponsible: first.driverResponsible || '',
+        odometer: first.odometer || 0,
+        description: first.description || '',
+        notes: first.notes || '',
+        expenses: vexp.map((expense) => ({
+          expenseType: expense.expenseType,
+          amount: expense.amount,
+          paymentMethodId: expense.paymentMethodId,
+        })),
+      });
+      vexp.forEach((expense) => {
+        addAudit('CREATE', 'Vehicles', `Logged ${expense.expenseType} expense ₱${expense.amount.toLocaleString()}`);
+      });
+      toast.success('Both vehicle outflows logged and posted to expenses');
+      await refetchAllData();
+      return true;
+    } catch (error) {
+      console.error('Failed to log both vehicle expenses', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to log both vehicle expenses');
+      return false;
+    }
+  };
+
   const deleteVehicleExpense = async (id: string) => {
     try {
       await api.delete(`/api/${activeWorkspaceId}/vehicle-expenses/${id}`);
@@ -686,40 +953,6 @@ export const AccountingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       console.error(e);
       toast.error('Failed to delete vehicle expense');
     }
-  };
-
-  const addPart = async (part: Omit<Part, 'id'>) => {
-    try {
-      await api.post(`/api/${activeWorkspaceId}/inventory`, { partName: part.name, sku: part.partNumber, category: part.category, stock: part.quantity, unitPrice: part.sellingPrice, reorderLevel: part.minimumStock });
-      addAudit('CREATE', 'Inventory', `Added part ${part.name}`);
-      await refetchAllData();
-    } catch (e) { console.error(e); }
-  };
-
-  const updatePart = async (id: string, updates: Partial<Part>) => {
-    try {
-      await api.put(`/api/${activeWorkspaceId}/inventory/${id}`, updates);
-      addAudit('UPDATE', 'Inventory', `Updated part ${id}`);
-      toast.success('Inventory item updated');
-      await refetchAllData();
-    } catch (e) { console.error(e); toast.error('Failed to update inventory item'); }
-  };
-
-  const deletePart = async (id: string) => {
-    try {
-      await api.delete(`/api/${activeWorkspaceId}/inventory/${id}`);
-      addAudit('VOID', 'Inventory', `Removed part ${id}`);
-      toast.success('Inventory item deleted');
-      await refetchAllData();
-    } catch (e) { console.error(e); toast.error('Failed to delete inventory item'); }
-  };
-
-  const restockPart = async (partId: string, quantityToAdd: number, unitCostPrice?: number) => {
-    try {
-      await api.post(`/api/${activeWorkspaceId}/inventory/${partId}/adjust-stock`, { quantity: quantityToAdd, reason: 'Restock' });
-      addAudit('RESTOCK', 'Inventory', `Restocked part ${partId} by +${quantityToAdd} units`);
-      await refetchAllData();
-    } catch (e) { console.error(e); }
   };
 
   const addCustomer = async (cust: Omit<Customer, 'id' | 'createdAt'>): Promise<string> => {
@@ -904,11 +1137,11 @@ export const AccountingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     } catch (e) { console.error(e); }
   };
 
-  const resetToDefaultData = () => { setRevenueTransactions([]); setExpenses([]); setCustomers([]); setEmployees([]); setPayrollRecords([]); setVehicles([]); setVehicleExpenses([]); setParts([]); setServiceJobs([]); setServiceCategories([]); setRevenueCategories([]); setExpenseCategories(defaultExpenseCategories); setPaymentMethods([]); setAreas([]); setCompanySettings(emptyCompanySettings); setAuditLogs([]); };
+  const resetToDefaultData = () => { setRevenueTransactions([]); setExpenses([]); setCustomers([]); setEmployees([]); setPayrollRecords([]); setVehicles([]); setVehicleExpenses([]); setServiceJobs([]); setServiceCategories([]); setRevenueCategories([]); setExpenseCategories(defaultExpenseCategories); setPaymentMethods([]); setAreas([]); setCompanySettings(emptyCompanySettings); setAuditLogs([]); };
 
-  const exportDatabaseJSON = () => { const blob = new Blob([JSON.stringify({ exportDate: new Date().toISOString(), revenueTransactions, expenses, customers, employees, payrollRecords, vehicles, vehicleExpenses, parts, serviceJobs, serviceCategories, revenueCategories, expenseCategories, paymentMethods, companySettings, auditLogs }, null, 2)], { type: 'application/json' }); const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = `chaching-backup-${new Date().toISOString().split('T')[0]}.json`; link.click(); };
+  const exportDatabaseJSON = () => { const blob = new Blob([JSON.stringify({ exportDate: new Date().toISOString(), revenueTransactions, expenses, customers, employees, payrollRecords, vehicles, vehicleExpenses, serviceJobs, serviceCategories, revenueCategories, expenseCategories, paymentMethods, companySettings, auditLogs }, null, 2)], { type: 'application/json' }); const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = `chaching-backup-${new Date().toISOString().split('T')[0]}.json`; link.click(); };
 
-  const importDatabaseJSON = (jsonString: string): boolean => { try { const data = JSON.parse(jsonString); if (Array.isArray(data.revenueTransactions)) setRevenueTransactions(data.revenueTransactions); if (Array.isArray(data.expenses)) setExpenses(data.expenses); if (Array.isArray(data.customers)) setCustomers(data.customers); if (Array.isArray(data.employees)) setEmployees(data.employees); if (Array.isArray(data.payrollRecords)) setPayrollRecords(data.payrollRecords); if (Array.isArray(data.vehicles)) setVehicles(data.vehicles); if (Array.isArray(data.vehicleExpenses)) setVehicleExpenses(data.vehicleExpenses); if (Array.isArray(data.parts)) setParts(data.parts); if (Array.isArray(data.serviceJobs)) setServiceJobs(data.serviceJobs); if (Array.isArray(data.serviceCategories)) setServiceCategories(data.serviceCategories); if (Array.isArray(data.revenueCategories)) setRevenueCategories(data.revenueCategories); if (Array.isArray(data.expenseCategories)) setExpenseCategories(data.expenseCategories); if (Array.isArray(data.paymentMethods)) setPaymentMethods(data.paymentMethods); if (data.companySettings) setCompanySettings(data.companySettings); addAudit('SETTINGS', 'Database', 'Restored complete database backup from JSON file.'); return true; } catch (err) { console.error(err); return false; } };
+  const importDatabaseJSON = (jsonString: string): boolean => { try { const data = JSON.parse(jsonString); if (Array.isArray(data.revenueTransactions)) setRevenueTransactions(data.revenueTransactions); if (Array.isArray(data.expenses)) setExpenses(data.expenses); if (Array.isArray(data.customers)) setCustomers(data.customers); if (Array.isArray(data.employees)) setEmployees(data.employees); if (Array.isArray(data.payrollRecords)) setPayrollRecords(data.payrollRecords); if (Array.isArray(data.vehicles)) setVehicles(data.vehicles); if (Array.isArray(data.vehicleExpenses)) setVehicleExpenses(data.vehicleExpenses); if (Array.isArray(data.serviceJobs)) setServiceJobs(data.serviceJobs); if (Array.isArray(data.serviceCategories)) setServiceCategories(data.serviceCategories); if (Array.isArray(data.revenueCategories)) setRevenueCategories(data.revenueCategories); if (Array.isArray(data.expenseCategories)) setExpenseCategories(data.expenseCategories); if (Array.isArray(data.paymentMethods)) setPaymentMethods(data.paymentMethods); if (data.companySettings) setCompanySettings(data.companySettings); addAudit('SETTINGS', 'Database', 'Restored complete database backup from JSON file.'); return true; } catch (err) { console.error(err); return false; } };
 
   return (
     <AccountingContext.Provider value={{
@@ -919,11 +1152,11 @@ export const AccountingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       areas,
       financialSummary, getSummaryForRange, getYearlyMatrix,
       addRevenueTransaction, updateRevenueTransaction, voidRevenueTransaction,
-      addExpense, updateExpense, voidExpense,
-      createServiceJob, updateServiceJob, deleteServiceJob,
-      addEmployee, updateEmployee, deleteEmployee, processPayroll, updatePayroll, deletePayroll,
-      addVehicle, updateVehicle, deleteVehicle, addVehicleExpense, deleteVehicleExpense,
+      addExpense, addExpensesBatch, updateExpense, voidExpense,
       addPart, updatePart, deletePart, restockPart,
+      createServiceJob, updateServiceJob, deleteServiceJob, syncJobOrderLedger,
+      addEmployee, updateEmployee, deleteEmployee, processPayroll, updatePayroll, deletePayroll,
+      addVehicle, updateVehicle, deleteVehicle, addVehicleExpense, addVehicleExpensesBatch, deleteVehicleExpense,
       addCustomer, updateCustomer, deleteCustomer,
       addServiceCategory, updateServiceCategory, deleteServiceCategory,
       addRevenueCategory, updateRevenueCategory, deleteRevenueCategory,

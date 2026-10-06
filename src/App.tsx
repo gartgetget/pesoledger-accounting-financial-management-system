@@ -14,7 +14,6 @@ import { JobsView } from './components/jobs/JobsView';
 import { JobModal } from './components/jobs/JobModal';
 import { PayrollView } from './components/payroll/PayrollView';
 import { VehiclesView } from './components/vehicles/VehiclesView';
-import { InventoryView } from './components/inventory/InventoryView';
 import { CustomersView } from './components/customers/CustomersView';
 import { MonthlyAccountingView } from './components/monthly/MonthlyAccountingView';
 import { YearlyAccountingView } from './components/yearly/YearlyAccountingView';
@@ -157,8 +156,6 @@ const MainAppContent: React.FC = () => {
             {activeTab === 'payroll' && <PayrollView />}
 
             {activeTab === 'vehicles' && <VehiclesView />}
-
-            {activeTab === 'inventory' && <InventoryView />}
 
             {activeTab === 'customers' && <CustomersView />}
 

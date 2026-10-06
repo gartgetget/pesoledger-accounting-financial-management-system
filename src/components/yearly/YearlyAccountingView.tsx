@@ -15,7 +15,7 @@ import { exportToExcel } from '../../utils/excel';
 export const YearlyAccountingView: React.FC = () => {
   const { getYearlyMatrix } = useAccounting();
 
-  const currentYear = new Date(getTodayDateString()).getFullYear();
+  const currentYear = Number(getTodayDateString().slice(0, 4));
   const [selectedYear, setSelectedYear] = useState(currentYear);
 
   const monthsMatrix = useMemo(() => {

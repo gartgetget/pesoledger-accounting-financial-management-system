@@ -15,10 +15,20 @@ export interface DateFilterRange {
   endDate: string; // YYYY-MM-DD
 }
 
+export const formatDateString = (date: Date): string => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+export const parseDateString = (dateStr: string): Date => {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  return new Date(year, month - 1, day);
+};
+
 export const getTodayDateString = (): string => {
-  // Use today or 2026-09-22 if system clock is 2026
-  const d = new Date();
-  return d.toISOString().split('T')[0];
+  return formatDateString(new Date());
 };
 
 export const formatDateDisplay = (dateStr: string): string => {
@@ -49,10 +59,10 @@ export const getDateRangeFromPreset = (
   preset: DateRangePreset,
   baseDateStr?: string
 ): DateFilterRange => {
-  const today = baseDateStr ? new Date(baseDateStr) : new Date();
+  const today = baseDateStr ? parseDateString(baseDateStr) : new Date();
   today.setHours(0, 0, 0, 0);
 
-  const format = (d: Date) => d.toISOString().split('T')[0];
+  const format = formatDateString;
 
   switch (preset) {
     case 'today': {

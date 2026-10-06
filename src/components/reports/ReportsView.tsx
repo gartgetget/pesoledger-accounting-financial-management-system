@@ -28,7 +28,6 @@ export const ReportsView: React.FC = () => {
     revenueTransactions,
     expenses,
     paymentMethods,
-    serviceJobs,
     areas,
   } = useAccounting();
 
@@ -45,12 +44,6 @@ export const ReportsView: React.FC = () => {
       });
 
     const costByArea: Record<string, number> = {};
-    serviceJobs
-      .filter((j) => isDateInRange(j.date, dateRange))
-      .forEach((j) => {
-        const key = j.area || 'Unassigned';
-        costByArea[key] = (costByArea[key] || 0) + (j.partsCostAmount || 0);
-      });
     expenses
       .filter((e) => !e.isVoid && isDateInRange(e.date, dateRange) && e.relatedModule !== 'salary')
       .forEach((e) => {
@@ -66,11 +59,6 @@ export const ReportsView: React.FC = () => {
         const revenueList = revenueTransactions
           .filter((r) => !r.isVoid && isDateInRange(r.date, dateRange) && (r.area || 'Unassigned') === name)
           .sort((a, b) => a.date.localeCompare(b.date));
-        const jobList = serviceJobs
-          .filter(
-            (j) => isDateInRange(j.date, dateRange) && (j.area || 'Unassigned') === name && (j.partsCostAmount || 0) > 0
-          )
-          .sort((a, b) => a.date.localeCompare(b.date));
         const expenseList = expenses
           .filter(
             (e) =>
@@ -81,22 +69,12 @@ export const ReportsView: React.FC = () => {
           )
           .sort((a, b) => a.date.localeCompare(b.date));
 
-        const costList = [
-          ...jobList.map((j) => ({
-            key: `job-${j.id}`,
-            date: j.date,
-            label: `${j.date} · ${j.jobNumber} · ${j.description || 'Parts cost'}${
-              j.customerName ? ` · ${j.customerName}` : ''
-            }`,
-            amount: j.partsCostAmount || 0,
-          })),
-          ...expenseList.map((e) => ({
+        const costList = expenseList.map((e) => ({
             key: `exp-${e.id}`,
             date: e.date,
             label: `${e.date} · ${e.category} · ${e.description}${e.vendorSupplier ? ` · ${e.vendorSupplier}` : ''}`,
             amount: e.amount || 0,
-          })),
-        ].sort((a, b) => a.date.localeCompare(b.date));
+          })).sort((a, b) => a.date.localeCompare(b.date));
 
         return {
           name,
@@ -113,7 +91,7 @@ export const ReportsView: React.FC = () => {
       totalCollections: rows.reduce((s, r) => s + r.collections, 0),
       totalCosts: rows.reduce((s, r) => s + r.costs, 0),
     };
-  }, [revenueTransactions, serviceJobs, expenses, dateRange, areas]);
+  }, [revenueTransactions, expenses, dateRange, areas]);
 
   const areaTotalNet = areaReport.totalCollections - areaReport.totalCosts;
   const areaMarginPct =
@@ -124,8 +102,8 @@ export const ReportsView: React.FC = () => {
   // P&L CALCULATIONS (Section 15)
   // Revenue
   const totalRevenue = financialSummary.totalRevenue;
-  // COGS: Parts used + direct technician salary
-  const partsUsedCOGS = financialSummary.partsExpense;
+  // Direct job costs are separated from general operating expenses.
+  const partsUsedCOGS = financialSummary.partsExpense + financialSummary.referralExpense;
   const technicianLaborCOGS = Math.round(financialSummary.salaryExpense * 0.7); // 70% of payroll is direct field technician labor
   const totalCOGS = partsUsedCOGS + technicianLaborCOGS;
   // Gross Profit = Revenue - COGS
@@ -155,7 +133,7 @@ export const ReportsView: React.FC = () => {
       { 'Account / Line Item': 'TOTAL REVENUE', 'Amount (PHP)': totalRevenue },
       { 'Account / Line Item': '', 'Amount (PHP)': '' },
       { 'Account / Line Item': 'COST OF GOODS & DIRECT SERVICES (COGS)', 'Amount (PHP)': '' },
-      { 'Account / Line Item': '  Parts Used in Repairs', 'Amount (PHP)': partsUsedCOGS },
+      { 'Account / Line Item': '  Parts / Materials and Referral Costs', 'Amount (PHP)': partsUsedCOGS },
       { 'Account / Line Item': '  Direct Field Technician Labor', 'Amount (PHP)': technicianLaborCOGS },
       { 'Account / Line Item': 'TOTAL COGS', 'Amount (PHP)': totalCOGS },
       { 'Account / Line Item': '', 'Amount (PHP)': '' },
@@ -294,10 +272,6 @@ export const ReportsView: React.FC = () => {
                   <span>Gross Collections from Appliance Services & Repairs</span>
                   <span className="tabular-nums">{formatPHP(totalRevenue)}</span>
                 </div>
-                <div className="flex justify-between py-1 text-slate-700">
-                  <span>Direct Sales of Replacement Appliance Parts</span>
-                  <span className="tabular-nums">₱0.00</span>
-                </div>
               </div>
               <div className="flex justify-between py-1.5 font-bold text-slate-900 border-t border-slate-200 bg-slate-50 px-2">
                 <span>TOTAL REVENUE</span>
@@ -313,7 +287,7 @@ export const ReportsView: React.FC = () => {
               </div>
               <div className="divide-y divide-slate-100 pl-4 py-1">
                 <div className="flex justify-between py-1 text-slate-700">
-                  <span>Parts & Consumables Used in Job Orders</span>
+                  <span>Parts, materials & referral costs</span>
                   <span className="tabular-nums text-rose-700">{formatPHP(partsUsedCOGS)}</span>
                 </div>
                 <div className="flex justify-between py-1 text-slate-700">
@@ -640,7 +614,7 @@ export const ReportsView: React.FC = () => {
                         <span className="tabular-nums text-emerald-800">{formatPHP(areaReport.totalCollections)}</span>
                       </div>
                       <div className="flex justify-between py-1 text-slate-700">
-                        <span>TOTAL COSTS (JOBS + TAGGED EXPENSES)</span>
+                        <span>TOTAL EXPENSES</span>
                         <span className="tabular-nums text-rose-700">{formatPHP(areaReport.totalCosts)}</span>
                       </div>
                     </div>

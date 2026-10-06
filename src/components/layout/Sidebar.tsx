@@ -7,7 +7,6 @@ import {
   Wrench,
   Users,
   Car,
-  Package,
   UserCheck,
   FileBarChart2,
   CalendarRange,
@@ -15,7 +14,6 @@ import {
   Settings,
   ShieldCheck,
   ShieldAlert,
-  AlertTriangle,
   LogOut,
   Building2,
   ChevronDown,
@@ -25,10 +23,8 @@ import { useAuth } from '../../context/AuthContext';
 import { ActiveTab } from '../../types';
 
 export const Sidebar: React.FC<{ isOpen?: boolean; onNavigate?: () => void }> = ({ isOpen, onNavigate }) => {
-  const { activeTab, setActiveTab, userRole, setUserRole, parts, companySettings, logout } = useAccounting();
+  const { activeTab, setActiveTab, userRole, setUserRole, companySettings, logout } = useAccounting();
   const { workspaces, activeWorkspace, selectWorkspace, isAuthenticated } = useAuth();
-
-  const lowStockCount = parts.filter((p) => p.quantity <= p.minimumStock).length;
 
   const [showWorkspaceList, setShowWorkspaceList] = React.useState(false);
 
@@ -40,7 +36,6 @@ export const Sidebar: React.FC<{ isOpen?: boolean; onNavigate?: () => void }> = 
     { id: 'jobs', label: 'Services & Jobs', icon: Wrench },
     { id: 'payroll', label: 'Payroll & Wages', icon: Users },
     { id: 'vehicles', label: 'Vehicles / Sasakyan', icon: Car },
-    { id: 'inventory', label: 'Parts & Inventory', icon: Package, badge: lowStockCount },
     { id: 'customers', label: 'Customers', icon: UserCheck },
     { id: 'reports', label: 'Financial Reports', icon: FileBarChart2 },
     { id: 'monthly', label: 'Monthly Accounting', icon: CalendarRange },
@@ -136,10 +131,7 @@ export const Sidebar: React.FC<{ isOpen?: boolean; onNavigate?: () => void }> = 
                 <span className="truncate">{item.label}</span>
               </div>
               {item.badge !== undefined && item.badge > 0 && (
-                <span className="flex items-center gap-1 text-[10px] text-amber-400 font-semibold">
-                  <AlertTriangle className="w-3 h-3" />
-                  {item.badge}
-                </span>
+                <span className="text-[10px] text-amber-400 font-semibold">{item.badge}</span>
               )}
             </button>
           );

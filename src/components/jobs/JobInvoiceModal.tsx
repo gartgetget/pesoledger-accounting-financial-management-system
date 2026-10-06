@@ -4,6 +4,7 @@ import { ServiceJob } from '../../types';
 import { useAccounting } from '../../context/AccountingContext';
 import { formatPHP } from '../../utils/currency';
 import { formatDateDisplay } from '../../utils/date';
+import { getJobCollectionTotals } from '../../utils/jobAccounting';
 
 interface JobInvoiceModalProps {
   job: ServiceJob | null;
@@ -11,7 +12,7 @@ interface JobInvoiceModalProps {
 }
 
 export const JobInvoiceModal: React.FC<JobInvoiceModalProps> = ({ job, onClose }) => {
-  const { companySettings, paymentMethods } = useAccounting();
+  const { companySettings, paymentMethods, expenses } = useAccounting();
 
   if (!job) return null;
 
@@ -21,8 +22,107 @@ export const JobInvoiceModal: React.FC<JobInvoiceModalProps> = ({ job, onClose }
 
   const getMethodName = (pmId: string) => {
     const found = paymentMethods.find((p) => p.id === pmId);
-    return found ? found.name : pmId;
+    return found ? found.name : pmId || 'Not specified';
   };
+  const invoiceCustomers = job.customers || [];
+  const jobTotals = getJobCollectionTotals(job, expenses);
+  const collectedCustomers = invoiceCustomers.filter(
+    (customer) => customer.amountCollected > 0 || customer.installationMaterialsPrice > 0
+  );
+  const customerPartsLines = invoiceCustomers.flatMap((customer, customerIndex) =>
+    (customer.parts || [])
+      .filter((part) => part.price > 0)
+      .map((part, partIndex) => ({
+        key: `part-${customerIndex}-${partIndex}`,
+        label: [part.description || 'Part / Material', part.sku && `SKU ${part.sku}`, part.invoice && `Invoice ${part.invoice}`]
+          .filter(Boolean)
+          .join(' · '),
+        customerName: customer.name,
+        amount: part.price,
+      }))
+  );
+  const customerReferralLines = invoiceCustomers
+    .filter((customer) => customer.referralAmount > 0)
+    .map((customer, index) => ({
+      key: `referral-${index}`,
+      label: customer.referral || 'Referral',
+      customerName: customer.name,
+      amount: customer.referralAmount,
+    }));
+  const linkedJobExpenses = expenses.filter(
+    (expense) =>
+      expense.relatedId === job.id &&
+      !expense.isVoid &&
+      (expense.category.toUpperCase().replace(/[^A-Z]/g, '').includes('PARTS') ||
+        expense.category.toUpperCase().replace(/[^A-Z]/g, '').includes('MATERIALS') ||
+        expense.category.toUpperCase().replace(/[^A-Z]/g, '').includes('REFERRAL') ||
+        expense.category.toUpperCase().replace(/[^A-Z]/g, '').includes('REFERAL'))
+  );
+  const ledgerPartsLines = linkedJobExpenses
+    .filter((expense) => expense.category.toUpperCase().includes('PARTS') || expense.category.toUpperCase().includes('MATERIALS'))
+    .map((expense) => ({
+      key: expense.id,
+      label: expense.description || expense.category,
+      customerName: '',
+      amount: expense.amount,
+    }));
+  const ledgerReferralLines = linkedJobExpenses
+    .filter((expense) => expense.category.toUpperCase().includes('REFERRAL'))
+    .map((expense) => ({
+      key: expense.id,
+      label: expense.description || expense.category,
+      customerName: '',
+      amount: expense.amount,
+    }));
+  const partsExpense = jobTotals.partsExpense;
+  const referralExpense = jobTotals.referralExpense;
+  const getCompleteExpenseLines = (
+    customerLines: typeof customerPartsLines,
+    ledgerLines: typeof ledgerPartsLines,
+    expectedAmount: number,
+    fallbackLabel: string,
+  ) => {
+    const customerAmount = customerLines.reduce((sum, line) => sum + line.amount, 0);
+    const ledgerAmount = ledgerLines.reduce((sum, line) => sum + line.amount, 0);
+    const sourceLines = ledgerAmount > customerAmount ? ledgerLines : customerLines;
+    const sourceAmount = Math.max(customerAmount, ledgerAmount);
+    const missingAmount = expectedAmount - sourceAmount;
+    return missingAmount > 0.009
+      ? [
+          ...sourceLines,
+          {
+            key: `job-expense-${fallbackLabel}`,
+            label: fallbackLabel,
+            customerName: '',
+            amount: missingAmount,
+          },
+        ]
+      : sourceLines;
+  };
+  const partsExpenseLines = getCompleteExpenseLines(
+    customerPartsLines,
+    ledgerPartsLines,
+    partsExpense,
+    'Parts / Materials',
+  );
+  const referralExpenseLines = getCompleteExpenseLines(
+    customerReferralLines,
+    ledgerReferralLines,
+    referralExpense,
+    'Referral',
+  );
+  const grossCollection = jobTotals.grossCollection;
+  const invoiceCollection = jobTotals.netCollection;
+  const customerGrossCollection = invoiceCustomers.reduce(
+    (sum, customer) => sum + customer.amountCollected + customer.installationMaterialsPrice,
+    0,
+  );
+  const additionalCollection = Math.max(0, grossCollection - customerGrossCollection);
+  const invoiceTotal = job.total > 0 || job.subtotal === 0
+    ? job.total
+    : Math.max(0, job.subtotal - job.discountAmount);
+  const netAfterJobExpenses = invoiceCollection;
+  const jobExpenseLines = [...partsExpenseLines, ...referralExpenseLines];
 
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 overflow-y-auto">
@@ -89,7 +189,9 @@ export const JobInvoiceModal: React.FC<JobInvoiceModalProps> = ({ job, onClose }
               <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">
                 Billed To Customer
               </span>
-              <p className="font-bold text-slate-900 mt-0.5 text-sm">{job.customerName}</p>
+              <p className="font-bold text-slate-900 mt-0.5 text-sm">
+                {(job.customers || []).map((customer) => customer.name).filter(Boolean).join(', ') || job.customerName}
+              </p>
               <p className="text-slate-600 mt-1">Lead Tech: <strong>{job.technicianName}</strong></p>
             </div>
 
@@ -97,7 +199,12 @@ export const JobInvoiceModal: React.FC<JobInvoiceModalProps> = ({ job, onClose }
               <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">
                 Service Details
               </span>
-              <p className="font-semibold text-slate-800 mt-0.5">{job.serviceCategory}</p>
+              <p className="font-semibold text-slate-800 mt-0.5">
+                {(job.customers || [])
+                  .map((customer) => [customer.name, customer.serviceCategory].filter(Boolean).join(' — '))
+                  .filter(Boolean)
+                  .join('; ')}
+              </p>
               <p className="text-slate-600 mt-1">{job.description}</p>
             </div>
           </div>
@@ -115,46 +222,44 @@ export const JobInvoiceModal: React.FC<JobInvoiceModalProps> = ({ job, onClose }
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {job.laborAmount > 0 && (
+                {invoiceCustomers.flatMap((customer, customerIndex) => [
+                  ...(customer.installationMaterials || customer.installationMaterialsPrice > 0 ? [
+                    <tr key={`${customerIndex}-installation-materials`}>
+                      <td className="py-2.5 px-4 text-slate-800">
+                        {customer.installationMaterials || 'Installation Materials'}
+                        {customer.name ? ` — ${customer.name}` : ''}
+                      </td>
+                      <td className="py-2.5 px-3 text-center text-slate-600">1</td>
+                      <td className="py-2.5 px-4 text-right font-mono text-slate-600">{formatPHP(customer.installationMaterialsPrice)}</td>
+                      <td className="py-2.5 px-4 text-right font-mono font-bold text-slate-900">{formatPHP(customer.installationMaterialsPrice)}</td>
+                    </tr>,
+                  ] : []),
+                  ...(customer.amountCollected > 0 ? [
+                    <tr key={`${customerIndex}-collection`}>
+                      <td className="py-2.5 px-4 text-slate-800">
+                        Service Collection
+                        {customer.name ? ` — ${customer.name}` : ''}
+                      </td>
+                      <td className="py-2.5 px-3 text-center text-slate-600">1</td>
+                      <td className="py-2.5 px-4 text-right font-mono text-slate-600">{formatPHP(customer.amountCollected)}</td>
+                      <td className="py-2.5 px-4 text-right font-mono font-bold text-slate-900">{formatPHP(customer.amountCollected)}</td>
+                    </tr>,
+                  ] : []),
+                ])}
+                {additionalCollection > 0 && (
                   <tr>
-                    <td className="py-2.5 px-4 font-medium text-slate-800">
-                      Professional Technical Labor & Diagnostics
-                    </td>
+                    <td className="py-2.5 px-4 text-slate-800">Additional Collection / Installation Materials</td>
                     <td className="py-2.5 px-3 text-center text-slate-600">1</td>
-                    <td className="py-2.5 px-4 text-right font-mono text-slate-600">
-                      {formatPHP(job.laborAmount)}
-                    </td>
-                    <td className="py-2.5 px-4 text-right font-mono font-bold text-slate-900">
-                      {formatPHP(job.laborAmount)}
-                    </td>
+                    <td className="py-2.5 px-4 text-right font-mono text-slate-600">{formatPHP(additionalCollection)}</td>
+                    <td className="py-2.5 px-4 text-right font-mono font-bold text-slate-900">{formatPHP(additionalCollection)}</td>
                   </tr>
                 )}
-
-                {job.partsUsed && job.partsUsed.map((p, idx) => (
-                  <tr key={idx}>
-                    <td className="py-2.5 px-4 text-slate-800">
-                      Part: {p.partName} <span className="text-slate-400 font-mono text-[10px]">[{p.partNumber}]</span>
-                    </td>
-                    <td className="py-2.5 px-3 text-center text-slate-600">{p.quantity}</td>
-                    <td className="py-2.5 px-4 text-right font-mono text-slate-600">
-                      {formatPHP(p.sellingPrice)}
-                    </td>
-                    <td className="py-2.5 px-4 text-right font-mono font-bold text-slate-900">
-                      {formatPHP(p.totalSelling)}
-                    </td>
-                  </tr>
-                ))}
-
-                {job.otherCharges > 0 && (
+                {invoiceCustomers.length === 0 && job.amountPaid > 0 && (
                   <tr>
-                    <td className="py-2.5 px-4 text-slate-800">Other Diagnostic / Consumable Charges</td>
+                    <td className="py-2.5 px-4 text-slate-800">Job Collection</td>
                     <td className="py-2.5 px-3 text-center text-slate-600">1</td>
-                    <td className="py-2.5 px-4 text-right font-mono text-slate-600">
-                      {formatPHP(job.otherCharges)}
-                    </td>
-                    <td className="py-2.5 px-4 text-right font-mono font-bold text-slate-900">
-                      {formatPHP(job.otherCharges)}
-                    </td>
+                    <td className="py-2.5 px-4 text-right font-mono text-slate-600">{formatPHP(job.amountPaid)}</td>
+                    <td className="py-2.5 px-4 text-right font-mono font-bold text-slate-900">{formatPHP(job.amountPaid)}</td>
                   </tr>
                 )}
               </tbody>
@@ -176,27 +281,62 @@ export const JobInvoiceModal: React.FC<JobInvoiceModalProps> = ({ job, onClose }
                 </div>
               )}
               <div className="flex justify-between py-1.5 text-slate-900 font-bold text-sm border-b-2 border-slate-900">
-                <span>TOTAL AMOUNT:</span>
-                <span className="text-emerald-800">{formatPHP(job.total)}</span>
+                <span>GROSS JOB TOTAL (BEFORE EXPENSES):</span>
+                <span className="text-emerald-800">{formatPHP(invoiceTotal)}</span>
               </div>
-              <div className="flex justify-between py-1 text-slate-600">
-                <span>Amount Paid ({getMethodName(job.paymentMethodId)}):</span>
-                <span>{formatPHP(job.amountPaid)}</span>
+              <div className="flex justify-between py-1 text-slate-700">
+                <span>Gross Collection Before Expenses:</span>
+                <span>{formatPHP(grossCollection)}</span>
+              </div>
+              {collectedCustomers.length > 0 ? (
+                collectedCustomers.map((customer, index) => (
+                  <div key={`${customer.customerId}-${index}`} className="flex justify-between gap-3 py-1 text-slate-600">
+                    <span className="min-w-0 truncate">
+                      {customer.name || 'Customer'} ({getMethodName(customer.paymentMethodId)}):
+                    </span>
+                    <span className="shrink-0">{formatPHP(customer.amountCollected + customer.installationMaterialsPrice)}</span>
+                  </div>
+                ))
+              ) : null}
+              <div className="flex justify-between py-1 text-emerald-800 font-bold">
+                <span>NET AFTER JOB EXPENSE:</span>
+                <span>{formatPHP(invoiceCollection)}</span>
               </div>
               <div className="flex justify-between py-1 text-slate-800 font-semibold">
-                <span>Balance Due:</span>
-                <span className={job.total - job.amountPaid > 0 ? 'text-rose-600' : 'text-slate-700'}>
-                  {formatPHP(Math.max(0, job.total - job.amountPaid))}
+                <span>PARTS / MATERIALS + REFERRAL EXPENSES:</span>
+                <span className={partsExpense + referralExpense > 0 ? 'text-rose-600' : 'text-slate-700'}>
+                  {formatPHP(partsExpense + referralExpense)}
                 </span>
               </div>
             </div>
           </div>
-
-          {/* Notes & Terms */}
-          <div className="p-3 bg-slate-50 rounded text-[11px] text-slate-500 space-y-1">
-            <p><strong>Warranty Policy:</strong> 30-day service warranty on labor and replaced parts. Electrical surge or misuse voids warranty.</p>
-            {job.notes && <p><strong>Job Remarks:</strong> {job.notes}</p>}
-          </div>
+          {(invoiceCollection > 0 || partsExpense > 0 || referralExpense > 0) && (
+            <div className="flex justify-end text-xs">
+              <div className="w-64 space-y-1 font-mono border-t border-slate-200 pt-2 text-amber-700">
+                <span className="block text-[10px] font-sans font-bold uppercase tracking-wide text-slate-500">
+                  Job Expenses and Net Collection
+                </span>
+                {jobExpenseLines.map((line) => (
+                  <div key={line.key} className="flex justify-between gap-3">
+                    <span className="min-w-0 truncate">
+                      {line.label}{line.customerName ? ` — ${line.customerName}` : ''}:
+                    </span>
+                    <span className="shrink-0">-{formatPHP(line.amount)}</span>
+                  </div>
+                ))}
+                <div className="flex justify-between border-t border-amber-200 pt-1">
+                  <span>Total Job Expenses:</span>
+                  <span>-{formatPHP(partsExpense + referralExpense)}</span>
+                </div>
+                <div className="flex justify-between border-t border-slate-300 pt-1 font-bold text-slate-900">
+                  <span>NET AFTER JOB EXPENSES:</span>
+                  <span className={netAfterJobExpenses >= 0 ? 'text-emerald-700' : 'text-rose-700'}>
+                    {formatPHP(netAfterJobExpenses)}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Signatures */}
           <div className="grid grid-cols-2 gap-8 pt-8 text-center text-xs">
@@ -212,6 +352,12 @@ export const JobInvoiceModal: React.FC<JobInvoiceModalProps> = ({ job, onClose }
               </div>
               <p className="text-[10px] text-slate-400">Certified Appliance Service Specialist</p>
             </div>
+          </div>
+
+          {/* Invoice note and terms */}
+          <div className="mt-8 border-t border-slate-200 pt-3 text-[11px] text-slate-600 space-y-1">
+            {job.notes && <p className="whitespace-pre-wrap"><strong>Note:</strong> {job.notes}</p>}
+            <p><strong>Warranty Policy:</strong> 30-day service warranty on labor and workmanship. Electrical surge or misuse voids warranty.</p>
           </div>
         </div>
       </div>

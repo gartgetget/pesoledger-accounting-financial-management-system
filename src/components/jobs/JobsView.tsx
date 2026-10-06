@@ -10,12 +10,14 @@ import {
   CheckCircle2,
   Clock,
   AlertCircle,
+  RefreshCw,
 } from 'lucide-react';
 import { useAccounting } from '../../context/AccountingContext';
 import { ServiceJob } from '../../types';
 import { formatPHP } from '../../utils/currency';
 import { formatDateDisplay } from '../../utils/date';
 import { exportToExcel } from '../../utils/excel';
+import { getJobCollectionTotals } from '../../utils/jobAccounting';
 import { JobInvoiceModal } from './JobInvoiceModal';
 import { ConfirmModal } from '../layout/ConfirmModal';
 
@@ -25,26 +27,39 @@ interface JobsViewProps {
 }
 
 export const JobsView: React.FC<JobsViewProps> = ({ onOpenJobModal, onEditJob }) => {
-  const { serviceJobs, deleteServiceJob, userRole } = useAccounting();
+  const { serviceJobs, expenses, deleteServiceJob, userRole, syncJobOrderLedger } = useAccounting();
 
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [categoryFilter, setCategoryFilter] = useState('ALL');
+  const [isSyncingJobs, setIsSyncingJobs] = useState(false);
 
   // Active Job for Invoice View
   const [invoiceJob, setInvoiceJob] = useState<ServiceJob | null>(null);
   // Delete Target
   const [deleteTarget, setDeleteTarget] = useState<ServiceJob | null>(null);
+  const getJobCustomerNames = (job: ServiceJob) => {
+    const names = (job.customers || [])
+      .map((customer) => customer.name.trim())
+      .filter(Boolean);
+    if (!names.length && job.customerName.trim()) names.push(job.customerName.trim());
+    return [...new Map(names.map((name) => [name.toLowerCase(), name])).values()];
+  };
+  const getJobCategories = (job: ServiceJob) =>
+    [...new Set((job.customers || []).map((customer) => customer.serviceCategory).filter(Boolean))];
+  const getJobCollection = (job: ServiceJob) => getJobCollectionTotals(job, expenses).netCollection;
+  const getJobExpenseTotal = (job: ServiceJob) => getJobCollectionTotals(job, expenses).totalExpenses;
+  const categoryOptions = [...new Set(serviceJobs.flatMap(getJobCategories))].sort();
 
   const filteredJobs = useMemo(() => {
     return serviceJobs.filter((job) => {
       if (statusFilter !== 'ALL' && job.paymentStatus !== statusFilter) return false;
-      if (categoryFilter !== 'ALL' && job.serviceCategory !== categoryFilter) return false;
+      if (categoryFilter !== 'ALL' && !getJobCategories(job).includes(categoryFilter)) return false;
 
       if (searchTerm.trim()) {
         const q = searchTerm.toLowerCase();
         const matchNumber = job.jobNumber.toLowerCase().includes(q);
-        const matchCust = job.customerName.toLowerCase().includes(q);
+        const matchCust = getJobCustomerNames(job).some((name) => name.toLowerCase().includes(q));
         const matchDesc = job.description.toLowerCase().includes(q);
         const matchTech = (job.technicianName || '').toLowerCase().includes(q);
         if (!matchNumber && !matchCust && !matchDesc && !matchTech) return false;
@@ -55,22 +70,31 @@ export const JobsView: React.FC<JobsViewProps> = ({ onOpenJobModal, onEditJob })
   }, [serviceJobs, statusFilter, categoryFilter, searchTerm]);
 
   const totalRevenueGenerated = useMemo(() => {
-    return filteredJobs.reduce((s, j) => s + j.amountPaid, 0);
-  }, [filteredJobs]);
+    return filteredJobs.reduce((s, j) => s + getJobCollection(j), 0);
+  }, [filteredJobs, expenses]);
+
+  const handleSyncJobOrders = async () => {
+    setIsSyncingJobs(true);
+    try {
+      await syncJobOrderLedger();
+    } catch {
+      // The accounting context reports the synchronization error.
+    } finally {
+      setIsSyncingJobs(false);
+    }
+  };
 
   const handleExport = () => {
     const exportData = filteredJobs.map((j) => ({
       'Job Order #': j.jobNumber,
       'Date': j.date,
-      'Customer': j.customerName,
-      'Category': j.serviceCategory,
+      'Customer': getJobCustomerNames(j).join(', '),
+      'Category': getJobCategories(j).join(', '),
       'Technician': j.technicianName,
       'Description': j.description,
-      'Labor': j.laborAmount,
-      'Parts Selling': j.partsAmount,
-      'Parts Cost': j.partsCostAmount,
       'Total Billed': j.total,
-      'Amount Paid': j.amountPaid,
+      'Net After Job Expense': getJobCollection(j),
+      'Parts / Materials and Referral Expenses': getJobExpenseTotal(j),
       'Status': j.paymentStatus,
     }));
     exportToExcel([{ sheetName: 'Service Orders', data: exportData }], `Service_Jobs_${new Date().toISOString().split('T')[0]}`);
@@ -87,19 +111,28 @@ export const JobsView: React.FC<JobsViewProps> = ({ onOpenJobModal, onEditJob })
           <div>
             <h1 className="text-base font-bold text-slate-900">Services & Job Orders Management</h1>
             <p className="text-xs text-slate-500">
-              Integrated technical labor, parts inventory deduction, and customer billing
+              Customer collections, installation materials, and job expenses
             </p>
           </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
           <div className="text-right px-4 py-2 bg-emerald-50 rounded-lg border border-emerald-200">
-            <span className="text-[10px] uppercase font-bold text-emerald-700 tracking-wider block">Total Paid Collections</span>
+            <span className="text-[10px] uppercase font-bold text-emerald-700 tracking-wider block">Net After Job Expense</span>
             <span className="text-base font-bold font-mono text-emerald-800 tabular-nums">
               {formatPHP(totalRevenueGenerated)}
             </span>
           </div>
 
+          <button
+            onClick={handleSyncJobOrders}
+            disabled={isSyncingJobs}
+            className="flex items-center gap-1.5 px-3 py-2 border border-slate-200 hover:border-slate-300 text-slate-700 text-xs font-semibold rounded-lg disabled:opacity-50 cursor-pointer"
+            title="Reconcile saved job-order parts and referral expenses into the expense ledger"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isSyncingJobs ? 'animate-spin' : ''}`} />
+            <span>{isSyncingJobs ? 'Syncing Expenses…' : 'Sync Job Expenses'}</span>
+          </button>
           <button
             onClick={onOpenJobModal}
             className="flex items-center gap-1.5 px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold rounded-lg shadow-xs transition-colors cursor-pointer"
@@ -141,10 +174,9 @@ export const JobsView: React.FC<JobsViewProps> = ({ onOpenJobModal, onEditJob })
             className="text-xs px-3 py-2 border border-slate-200 rounded-lg bg-white"
           >
             <option value="ALL">All Categories</option>
-            <option value="REF/AC">REF/AC</option>
-            <option value="WM/TV">WM/TV</option>
-            <option value="PARAÑAQUE">PARAÑAQUE</option>
-            <option value="JIM/EUGENE">JIM/EUGENE</option>
+            {categoryOptions.map((category) => (
+              <option key={category} value={category}>{category}</option>
+            ))}
           </select>
         </div>
 
@@ -171,14 +203,15 @@ export const JobsView: React.FC<JobsViewProps> = ({ onOpenJobModal, onEditJob })
                 <th className="py-3 px-4 hidden md:table-cell">Diagnosis / Details</th>
                 <th className="py-3 px-4 text-center">Job Status</th>
                 <th className="py-3 px-4 text-center hidden md:table-cell">Payment</th>
-                <th className="py-3 px-4 text-right">Total Billed</th>
+                <th className="py-3 px-4 text-right">Net After Job Expense</th>
+                <th className="py-3 px-4 text-right">Parts / Materials + Referral Expenses</th>
                 <th className="py-3 px-4 text-center">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filteredJobs.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="py-12 text-center text-slate-400 text-xs">
+                  <td colSpan={11} className="py-12 text-center text-slate-400 text-xs">
                     No service jobs found matching your filter criteria.
                   </td>
                 </tr>
@@ -192,10 +225,27 @@ export const JobsView: React.FC<JobsViewProps> = ({ onOpenJobModal, onEditJob })
                       {formatDateDisplay(job.date)}
                     </td>
                     <td className="py-3 px-4 font-semibold text-slate-900">
-                      {job.customerName}
+                      {(() => {
+                        const customerNames = getJobCustomerNames(job);
+                        const primaryCustomer = customerNames[0] || job.customerName || '—';
+                        const additionalCount = customerNames.length - 1;
+                        return (
+                          <span
+                            title={customerNames.join(', ')}
+                            aria-label={customerNames.join(', ') || primaryCustomer}
+                          >
+                            {primaryCustomer}
+                            {additionalCount > 0 && (
+                              <span className="ml-1 text-xs font-medium text-slate-500">
+                                +{additionalCount}
+                              </span>
+                            )}
+                          </span>
+                        );
+                      })()}
                     </td>
                     <td className="py-3 px-4 whitespace-nowrap text-slate-700">
-                      {job.serviceCategory}
+                      {getJobCategories(job).join(', ') || '—'}
                     </td>
                     <td className="py-3 px-4 whitespace-nowrap text-slate-700 hidden md:table-cell">
                       {job.technicianName}
@@ -245,8 +295,11 @@ export const JobsView: React.FC<JobsViewProps> = ({ onOpenJobModal, onEditJob })
                         </span>
                       )}
                     </td>
-                    <td className="py-3 px-4 text-right font-mono font-bold text-slate-900 tabular-nums whitespace-nowrap text-sm">
-                      {formatPHP(job.total)}
+                    <td className="py-3 px-4 text-right font-mono font-bold text-emerald-800 tabular-nums whitespace-nowrap text-sm">
+                      {formatPHP(getJobCollection(job))}
+                    </td>
+                    <td className="py-3 px-4 text-right font-mono text-rose-700 tabular-nums whitespace-nowrap">
+                      {formatPHP(getJobExpenseTotal(job))}
                     </td>
                     <td className="py-3 px-4 text-center whitespace-nowrap">
                       <div className="flex items-center justify-center gap-2">

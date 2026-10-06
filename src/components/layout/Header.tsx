@@ -54,8 +54,6 @@ export const Header: React.FC<HeaderProps> = ({
         return 'Employee Payroll & Compensation';
       case 'vehicles':
         return 'Fleet & Vehicle Expenses (Sasakyan)';
-      case 'inventory':
-        return 'Parts & Inventory Management (OW Parts)';
       case 'customers':
         return 'Client & Customer Records';
       case 'reports':

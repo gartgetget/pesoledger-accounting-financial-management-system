@@ -128,34 +128,10 @@ export const MigrationView: React.FC = () => {
       },
     ];
 
-    const sampleParts = [
-      {
-        'Part Name': 'Dual Run Capacitor 45+5uF 450V',
-        'Part Number': 'CAP-45-5',
-        'Category': 'Capacitor',
-        'Cost Price': 280,
-        'Selling Price': 750,
-        'Quantity': 15,
-        'Min Stock Alert': 4,
-        'Supplier': 'Quiapo Electro Supply',
-      },
-      {
-        'Part Name': 'R410A Refrigerant Tank 11.3kg',
-        'Part Number': 'FREON-410A',
-        'Category': 'Refrigerant',
-        'Cost Price': 3800,
-        'Selling Price': 7200,
-        'Quantity': 3,
-        'Min Stock Alert': 1,
-        'Supplier': 'Cooling Master Trading',
-      },
-    ];
-
     exportToExcel(
       [
         { sheetName: 'Collections & Revenue', data: sampleRevenue },
         { sheetName: 'Expenses & Disbursements', data: sampleExpenses },
-        { sheetName: 'Parts & Inventory', data: sampleParts },
       ],
       'COMPUTATION_TEMPLATE_Standard'
     );

@@ -20,6 +20,50 @@ router.get("/:workspaceId/expenses", ensureWorkspaceAccess, async (req, res) => 
   res.json(entries);
 });
 
+router.post("/:workspaceId/expenses/batch", ensureWorkspaceAccess, async (req, res) => {
+  const { workspaceId } = req.params;
+  const { entries } = req.body || {};
+  if (!Array.isArray(entries) || entries.length !== 2) {
+    return res.status(400).json({ message: "Exactly two expense entries are required" });
+  }
+
+  const validEntries = entries.map((entry: any) => {
+    const amount = Number(entry?.amount);
+    const date = entry?.date ? new Date(entry.date) : null;
+    const category = typeof entry?.category === "string" ? entry.category.trim().toUpperCase() : "";
+    const paymentMethod = typeof entry?.paymentMethodId === "string"
+      ? entry.paymentMethodId.trim()
+      : typeof entry?.paymentMethod === "string"
+        ? entry.paymentMethod.trim()
+        : "";
+    if (!date || Number.isNaN(date.getTime()) || !category || !Number.isFinite(amount) || amount <= 0 || !paymentMethod) {
+      return null;
+    }
+    return {
+      workspaceId,
+      date,
+      categoryId: typeof entry.categoryId === "string" ? entry.categoryId : "",
+      category,
+      description: typeof entry.description === "string" ? entry.description.trim() : "",
+      amount,
+      paymentMethod,
+      area: typeof entry.area === "string" ? entry.area : "",
+      relatedModule: "general",
+      relatedId: "",
+      createdBy: req.user._id.toString(),
+    };
+  });
+
+  if (validEntries.some((entry) => entry === null)) {
+    return res.status(400).json({
+      message: "Each expense requires a valid date, category, positive amount, and payment method",
+    });
+  }
+
+  const created = await ExpenseEntry.insertMany(validEntries);
+  res.status(201).json(created);
+});
+
 router.post("/:workspaceId/expenses", ensureWorkspaceAccess, async (req, res) => {
   const { workspaceId } = req.params;
   const b = req.body || {};
@@ -84,12 +128,14 @@ router.delete("/:workspaceId/expenses/:id", ensureWorkspaceAccess, async (req, r
   const entry = await ExpenseEntry.findOne({ _id: id, workspaceId });
   if (!entry) return res.status(404).json({ message: "Expense entry not found" });
 
-  if (entry.relatedModule === "vehicle" || entry.relatedModule === "salary") {
+  if (entry.relatedModule === "vehicle" || entry.relatedModule === "salary" || entry.relatedModule === "job") {
     return res.status(400).json({
       message:
         entry.relatedModule === "vehicle"
           ? "Auto-posted from Vehicles — delete the vehicle expense instead."
-          : "Auto-posted from Payroll — delete the payroll entry instead.",
+          : entry.relatedModule === "salary"
+            ? "Auto-posted from Payroll — delete the payroll entry instead."
+            : "Auto-posted from Job Orders — edit or delete the job order instead.",
     });
   }
 

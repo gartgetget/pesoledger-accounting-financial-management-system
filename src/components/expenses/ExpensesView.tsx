@@ -7,6 +7,7 @@ import {
   Edit2,
   Trash2,
   Filter,
+  RefreshCw,
 } from 'lucide-react';
 import { useAccounting } from '../../context/AccountingContext';
 import { Expense } from '../../types';
@@ -27,13 +28,17 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
     expenses,
     expenseCategories,
     paymentMethods,
+    areas,
     dateRange,
     voidExpense,
     userRole,
+    syncJobOrderLedger,
   } = useAccounting();
 
+  const [isSyncingJobOrders, setIsSyncingJobOrders] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('ALL');
+  const [areaFilter, setAreaFilter] = useState('ALL');
   const [paymentFilter, setPaymentFilter] = useState('ALL');
   const [sortBy, setSortBy] = useState<'date-desc' | 'date-asc' | 'amount-desc' | 'amount-asc'>('date-desc');
   const [includeVoid, setIncludeVoid] = useState(false);
@@ -43,6 +48,7 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
       if (!includeVoid && e.isVoid) return false;
       if (!isDateInRange(e.date, dateRange)) return false;
       if (categoryFilter !== 'ALL' && e.category !== categoryFilter) return false;
+      if (areaFilter !== 'ALL' && (e.area || 'Unassigned') !== areaFilter) return false;
       if (paymentFilter !== 'ALL' && e.paymentMethodId !== paymentFilter) return false;
 
       if (searchTerm.trim()) {
@@ -62,7 +68,22 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
       if (sortBy === 'amount-asc') return a.amount - b.amount;
       return 0;
     });
-  }, [expenses, includeVoid, dateRange, categoryFilter, paymentFilter, searchTerm, sortBy]);
+  }, [expenses, includeVoid, dateRange, categoryFilter, areaFilter, paymentFilter, searchTerm, sortBy]);
+
+  const teamExpenseRows = useMemo(() => {
+    const totals = new Map<string, number>();
+    expenses
+      .filter((expense) => !expense.isVoid && isDateInRange(expense.date, dateRange))
+      .forEach((expense) => {
+        const team = expense.area || 'Unassigned';
+        totals.set(team, (totals.get(team) || 0) + expense.amount);
+      });
+    areas.forEach((area) => {
+      if (!totals.has(area.name)) totals.set(area.name, 0);
+    });
+    return Array.from(totals, ([team, amount]) => ({ team, amount }))
+      .sort((a, b) => b.amount - a.amount || a.team.localeCompare(b.team));
+  }, [expenses, dateRange, areas]);
 
   const totalFilteredAmount = useMemo(() => {
     return filteredList.filter((e) => !e.isVoid).reduce((s, e) => s + e.amount, 0);
@@ -71,6 +92,17 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
   const getMethodName = (pmId: string) => {
     const found = paymentMethods.find((p) => p.id === pmId);
     return found ? found.name : pmId;
+  };
+
+  const handleSyncJobOrders = async () => {
+    setIsSyncingJobOrders(true);
+    try {
+      await syncJobOrderLedger();
+    } catch {
+      // The context reports the API error to the user.
+    } finally {
+      setIsSyncingJobOrders(false);
+    }
   };
 
   const handleExportExcel = () => {
@@ -141,7 +173,7 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
 
       {/* FILTERS */}
       <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs space-y-3">
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-2.5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-6 gap-2.5">
           <div className="md:col-span-2 relative">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
@@ -164,6 +196,19 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
                 <option key={c.id} value={c.name}>
                   {c.name}
                 </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <select
+              value={areaFilter}
+              onChange={(e) => setAreaFilter(e.target.value)}
+              className="w-full text-xs px-3 py-2 border border-slate-200 rounded-lg focus:outline-hidden bg-white text-slate-700"
+            >
+              <option value="ALL">All Teams / Areas</option>
+              {teamExpenseRows.map(({ team }) => (
+                <option key={team} value={team}>{team}</option>
               ))}
             </select>
           </div>
@@ -231,6 +276,43 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
         </div>
       </div>
 
+      <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-xs">
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <h2 className="text-sm font-bold text-slate-900">Expenses by Team</h2>
+            <p className="text-xs text-slate-500">Recorded expense totals for the selected period</p>
+          </div>
+          <button
+            type="button"
+            onClick={handleSyncJobOrders}
+            disabled={isSyncingJobOrders}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-rose-200 px-3 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-50 disabled:cursor-wait disabled:opacity-60"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${isSyncingJobOrders ? 'animate-spin' : ''}`} />
+            {isSyncingJobOrders ? 'Syncing job orders...' : 'Sync job orders'}
+          </button>
+        </div>
+        {teamExpenseRows.length === 0 ? (
+          <p className="text-xs text-slate-400 text-center py-3">No team expenses in this period yet.</p>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+            {teamExpenseRows.map(({ team, amount }) => (
+              <button
+                key={team}
+                type="button"
+                onClick={() => setAreaFilter(team)}
+                className={`flex items-center justify-between gap-3 rounded-lg border px-3 py-2 text-left transition-colors ${
+                  areaFilter === team ? 'border-rose-300 bg-rose-50' : 'border-slate-200 hover:bg-slate-50'
+                }`}
+              >
+                <span className="truncate text-xs font-medium text-slate-700">{team}</span>
+                <span className="shrink-0 font-mono text-xs font-bold tabular-nums text-rose-700">{formatPHP(amount)}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
       {/* EXPENSES TABLE */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
         <div className="overflow-x-auto">
@@ -243,7 +325,7 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
                 <th className="py-3 px-4">Vendor / Supplier</th>
                 <th className="py-3 px-4 hidden md:table-cell">Person Responsible</th>
                 <th className="py-3 px-4 hidden md:table-cell">Payment Method</th>
-                <th className="py-3 px-4 hidden md:table-cell">Area</th>
+                <th className="py-3 px-4 hidden md:table-cell">Team / Area</th>
                 <th className="py-3 px-4 hidden md:table-cell">OR / Ref #</th>
                 <th className="py-3 px-4 text-right">Amount (₱)</th>
                 <th className="py-3 px-4 text-center">Actions</th>

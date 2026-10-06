@@ -86,6 +86,90 @@ router.get("/:workspaceId/vehicle-expenses", ensureWorkspaceAccess, async (req, 
   res.json(expenses);
 });
 
+router.post("/:workspaceId/vehicle-expenses/batch", ensureWorkspaceAccess, async (req, res) => {
+  const { workspaceId } = req.params;
+  const { vehicleId, vehicleName, date, area, driverResponsible, odometer, description, notes, expenses } = req.body || {};
+  const validTypes = ["Fuel/Gas", "Maintenance", "Repairs", "Toll", "Parking", "Other"];
+
+  if (!vehicleId || !date || !Array.isArray(expenses) || expenses.length !== 2) {
+    return res.status(400).json({ message: "Vehicle, date, and exactly two vehicle expense lines are required" });
+  }
+  const parsedDate = new Date(date);
+  if (Number.isNaN(parsedDate.getTime())) {
+    return res.status(400).json({ message: "A valid date is required" });
+  }
+  const normalizedExpenses = expenses.map((expense: any) => ({
+    expenseType: String(expense?.expenseType || ""),
+    amount: Number(expense?.amount),
+    paymentMethodId: String(expense?.paymentMethodId || "").trim(),
+  }));
+  if (normalizedExpenses.some((expense: any) =>
+    !validTypes.includes(expense.expenseType) ||
+    !Number.isFinite(expense.amount) ||
+    expense.amount <= 0 ||
+    !expense.paymentMethodId
+  )) {
+    return res.status(400).json({
+      message: "Each vehicle expense requires a valid type, positive amount, and payment method",
+    });
+  }
+
+  const vehicle = await Vehicle.findOne({ _id: vehicleId, workspaceId });
+  if (!vehicle) return res.status(404).json({ message: "Vehicle not found" });
+
+  const createdVehicleExpenses: Array<InstanceType<typeof VehicleExpense>> = [];
+  const createdLedgerIds: string[] = [];
+  try {
+    for (const line of normalizedExpenses) {
+      const vehicleExpense = await VehicleExpense.create({
+        workspaceId,
+        vehicleId,
+        vehicleName: vehicleName || vehicle.vehicleName,
+        date: parsedDate,
+        expenseType: line.expenseType,
+        amount: line.amount,
+        paymentMethodId: line.paymentMethodId,
+        area: area || "",
+        driverResponsible: driverResponsible || "",
+        odometer: Number(odometer) || 0,
+        description: description || `${line.expenseType} — ${vehicle.vehicleName}`,
+        notes: notes || "",
+        createdBy: req.user._id.toString(),
+      });
+      createdVehicleExpenses.push(vehicleExpense);
+
+      const category = ledgerCategoryForVehicleExpense(line.expenseType);
+      const categoryId = await findCategoryIdByName(workspaceId, category);
+      const ledgerEntry = await ExpenseEntry.create({
+        workspaceId,
+        date: parsedDate,
+        categoryId,
+        category,
+        description: `${line.expenseType} — ${description || vehicleExpense.vehicleName}`,
+        amount: line.amount,
+        paymentMethod: line.paymentMethodId,
+        area: area || "",
+        relatedModule: "vehicle",
+        relatedId: vehicleExpense._id.toString(),
+        createdBy: req.user._id.toString(),
+      });
+      createdLedgerIds.push(ledgerEntry._id.toString());
+      vehicleExpense.expenseId = ledgerEntry._id.toString();
+      vehicleExpense.updatedAt = new Date();
+      await vehicleExpense.save();
+    }
+  } catch (error) {
+    await ExpenseEntry.deleteMany({ _id: { $in: createdLedgerIds }, workspaceId });
+    await VehicleExpense.deleteMany({
+      _id: { $in: createdVehicleExpenses.map((entry) => entry._id) },
+      workspaceId,
+    });
+    throw error;
+  }
+
+  res.status(201).json(createdVehicleExpenses);
+});
+
 router.post("/:workspaceId/vehicle-expenses", ensureWorkspaceAccess, async (req, res) => {
   const { workspaceId } = req.params;
   const { vehicleId, vehicleName, date, expenseType, amount, paymentMethodId, area, driverResponsible, odometer, description, notes } = req.body;

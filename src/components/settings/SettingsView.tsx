@@ -186,7 +186,7 @@ export const SettingsView: React.FC = () => {
               Accounting Admin Accounts
             </h2>
             <p className="text-[11px] text-slate-500 mt-1">
-              Each account has separate transactions, customers, payroll, inventory, and settings.
+              Each account has separate transactions, customers, payroll, and settings.
             </p>
           </div>
 

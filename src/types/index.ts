@@ -100,24 +100,13 @@ export interface Part {
   name: string;
   category: string;
   description?: string;
-  supplier: string;
+  supplier?: string;
   standardPrice?: number;
   costPrice: number;
   sellingPrice: number;
   quantity: number;
   minimumStock: number;
   dateAdded?: string;
-}
-
-export interface PartUsage {
-  partId: string;
-  partName: string;
-  partNumber: string;
-  quantity: number;
-  costPrice: number;
-  sellingPrice: number;
-  totalCost: number;
-  totalSelling: number;
 }
 
 export type PaymentStatus = 'Paid' | 'Partially Paid' | 'Unpaid';
@@ -127,6 +116,20 @@ export interface JobCustomer {
   customerId: string;
   name: string;
   amountCollected: number;
+  paymentMethodId: string;
+  serviceCategory: string;
+  parts: JobPartLine[];
+  installationMaterials: string;
+  installationMaterialsPrice: number;
+  referral: string;
+  referralAmount: number;
+}
+
+export interface JobPartLine {
+  sku: string;
+  invoice: string;
+  description: string;
+  price: number;
 }
 
 export interface ServiceJob {
@@ -139,12 +142,8 @@ export interface ServiceJob {
   date: string;
   technicianId: string;
   technicianName: string;
-  serviceCategory: string; // e.g. 'REF/AC', 'WM/TV', 'PARAÑAQUE'
   description: string;
   laborAmount: number;
-  partsUsed: PartUsage[];
-  partsAmount: number; // selling price total
-  partsCostAmount: number; // cost price total
   otherCharges: number;
   discountType: 'percentage' | 'amount';
   discountValue: number;
@@ -157,7 +156,9 @@ export interface ServiceJob {
   status: JobStatus;
   notes?: string;
   revenueId?: string;
-  expenseId?: string; // for parts cost
+  expenseId?: string;
+  jobPartsExpense?: number;
+  jobReferralExpense?: number;
   createdAt: string;
 }
 
@@ -198,7 +199,7 @@ export interface Expense {
   employeeName?: string;
   referenceNumber?: string;
   notes?: string;
-  relatedModule?: 'salary' | 'vehicle' | 'parts' | 'daily' | 'job' | 'general';
+  relatedModule?: 'salary' | 'vehicle' | 'daily' | 'job' | 'general';
   relatedId?: string;
   isVoid?: boolean;
   voidReason?: string;
@@ -248,7 +249,6 @@ export type ActiveTab =
   | 'jobs'
   | 'payroll'
   | 'vehicles'
-  | 'inventory'
   | 'customers'
   | 'reports'
   | 'monthly'

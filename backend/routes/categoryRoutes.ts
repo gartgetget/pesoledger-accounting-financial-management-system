@@ -18,6 +18,26 @@ router.get("/:workspaceId/categories", ensureWorkspaceAccess, async (req, res) =
   const { workspaceId } = req.params;
   const { type } = req.query;
 
+  if (!type || type === "expense") {
+    for (const name of ["PARTS / MATERIALS", "REFERRAL"]) {
+      const existing = await Category.findOne({
+        workspaceId,
+        type: "expense",
+        name: new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i"),
+      });
+      if (!existing) {
+        await Category.create({
+          workspaceId,
+          type: "expense",
+          name,
+          description: "Job-order expense category",
+          isActive: true,
+          createdBy: req.user._id.toString(),
+        });
+      }
+    }
+  }
+
   const filter: any = { workspaceId, isActive: true };
   if (type) filter.type = type;
 

@@ -6,6 +6,7 @@ import ExpenseEntry from "./models/ExpenseEntry.js";
 import PayrollEntry from "./models/PayrollEntry.js";
 import PaymentMethod from "./models/PaymentMethod.js";
 import Category from "./models/Category.js";
+import { getJobRevenueLines } from "./jobRevenue.js";
 
 let ran = false;
 
@@ -26,6 +27,16 @@ const resolveCategoryId = async (workspaceId: string, name: string): Promise<str
       type: "expense",
     });
     if (ci) id = ci._id.toString();
+  }
+  if (!id && (name === "REFERRAL" || name === "PARTS / MATERIALS")) {
+    const category = await Category.create({
+      workspaceId,
+      type: "expense",
+      name,
+      description: "Automatically recorded from service and job orders",
+      isActive: true,
+    });
+    id = category._id.toString();
   }
   categoryCache.set(key, id);
   return id;
@@ -58,52 +69,145 @@ export async function runLedgerBackfill(): Promise<void> {
   let expenseCount = 0;
 
   try {
-    // ---- Job orders -> revenue collections ----
+    // ---- Job orders -> revenue collections and operating expenses ----
     const jobs = await JobOrder.collection.find({}).toArray();
     for (const job of jobs) {
       const workspaceId = String(job.workspaceId || "");
-      const amountPaid = Number(job.amountPaid || 0);
-      const shouldPost = job.status === "completed" && amountPaid > 0;
-      const linked = job.revenueId ? String(job.revenueId) : "";
-      const alive = linked ? await linkAlive(RevenueEntry, linked, workspaceId) : false;
-
-      // keep the area tag on job-linked revenue in sync with the job
-      if (alive && job.area) {
-        const rev = await RevenueEntry.findOne({ _id: linked, workspaceId });
-        if (rev && rev.area !== String(job.area)) {
-          rev.area = String(job.area);
-          await rev.save();
+      const customers = Array.isArray(job.customers) ? job.customers : [];
+      const customerRevenue = customers.reduce(
+        (sum: number, customer: any) =>
+          sum + (Number(customer.amountCollected) || 0) + (Number(customer.installationMaterialsPrice) || 0),
+        0,
+      );
+      const calculatedSubtotal = customers.length > 0 ? customerRevenue : Number(job.amountPaid || 0);
+      const subtotal = customers.length > 0
+        ? Math.max(calculatedSubtotal, Number(job.subtotal || 0))
+        : calculatedSubtotal;
+      const discountValue = Number(job.discountValue || 0);
+      const requestedDiscount = job.discountType === "amount"
+        ? discountValue
+        : (subtotal * discountValue) / 100;
+      const discountAmount = Math.min(subtotal, Math.max(0, requestedDiscount));
+      job.subtotal = subtotal;
+      job.discountAmount = discountAmount;
+      job.totalAmount = Math.max(0, subtotal - discountAmount);
+      if (customers.length > 0) job.amountPaid = Math.max(customerRevenue, Number(job.amountPaid || 0));
+      const revenueLines = job.status === "cancelled"
+        ? []
+        : getJobRevenueLines({
+            ...job,
+            jobNumber: String(job.jobNumber || ""),
+            customerName: String(job.customerName || ""),
+            date: job.date || job.createdAt || new Date(),
+            area: String(job.area || ""),
+          });
+      const relatedId = String(job._id);
+      const remainingRevenue = await RevenueEntry.find({ workspaceId, relatedId });
+      const syncedRevenueIds: string[] = [];
+      for (const line of revenueLines) {
+        const paymentMethod = await resolvePaymentMethod(workspaceId, line.paymentMethod);
+        const matchIndex = remainingRevenue.findIndex(
+          (revenue) => revenue.category === line.category && revenue.paymentMethod === paymentMethod,
+        );
+        const legacyIndex = matchIndex < 0 && revenueLines.length === 1 && remainingRevenue.length === 1 ? 0 : matchIndex;
+        const existingRevenue = legacyIndex >= 0 ? remainingRevenue.splice(legacyIndex, 1)[0] : null;
+        const payload = { ...line, paymentMethod, relatedId };
+        if (existingRevenue) {
+          Object.assign(existingRevenue, payload);
+          existingRevenue.updatedAt = new Date();
+          await existingRevenue.save();
+          syncedRevenueIds.push(existingRevenue._id.toString());
+        } else {
+          const revenue = await RevenueEntry.create({
+            workspaceId,
+            ...payload,
+            createdBy: String(job.createdBy || ""),
+          });
+          syncedRevenueIds.push(revenue._id.toString());
+          revenueCount++;
         }
       }
-
-      if (!shouldPost) {
-        if (linked) {
-          if (alive) {
-            await RevenueEntry.deleteOne({ _id: linked, workspaceId });
-          }
-          await JobOrder.collection.updateOne({ _id: job._id }, { $set: { revenueId: "" } });
-        }
-        continue;
+      if (remainingRevenue.length > 0) {
+        await RevenueEntry.deleteMany({ _id: { $in: remainingRevenue.map((revenue) => revenue._id) }, workspaceId });
       }
-      if (alive) continue;
+      job.revenueId = syncedRevenueIds[0] || "";
 
-      const rev = await RevenueEntry.create({
-        workspaceId,
-        date: job.date || job.createdAt || new Date(),
-        category: job.serviceCategory || "JOB ORDER",
-        description: `Job ${job.jobNumber}${job.customerName ? ` — ${job.customerName}` : ""}`,
-        amount: amountPaid,
-        paymentMethod: await resolvePaymentMethod(workspaceId, String(job.paymentMethodId || "")),
-        referenceNo: job.jobNumber || "",
-        relatedId: String(job._id),
-        area: String(job.area || ""),
-        createdBy: String(job.createdBy || ""),
-      });
+      const customerPartsAmount = customers.reduce(
+        (sum: number, customer: any) =>
+          sum + (Array.isArray(customer.parts)
+            ? customer.parts.reduce((partSum: number, part: any) => partSum + (Number(part.price) || 0), 0)
+            : 0),
+        0,
+      );
+      const legacyPartsAmount = Array.isArray(job.parts)
+        ? job.parts.reduce((sum: number, part: any) => sum + (Number(part.price) || 0), 0)
+        : 0;
+      const partsAmount = customerPartsAmount || legacyPartsAmount;
+      const nestedReferralAmount = customers.reduce(
+        (sum: number, customer: any) => sum + (Number(customer.referralAmount) || 0),
+        0,
+      );
+      const referralAmount = nestedReferralAmount || Number(job.referralAmount ?? job.referralCost ?? 0) || 0;
+      const expenses = [
+        { category: "REFERRAL", amount: job.status !== "cancelled" ? referralAmount : 0 },
+        { category: "PARTS / MATERIALS", amount: job.status !== "cancelled" ? partsAmount : 0 },
+      ];
+      const expenseIds: string[] = [];
+      for (const { category, amount } of expenses) {
+        const query = {
+          workspaceId,
+          relatedModule: "job",
+          relatedId: String(job._id),
+          category,
+        };
+        const existingExpense = await ExpenseEntry.findOne(query);
+        if (amount <= 0) {
+          if (existingExpense) await existingExpense.deleteOne();
+          continue;
+        }
+
+        const payload = {
+          date: job.date || job.createdAt || new Date(),
+          categoryId: await resolveCategoryId(workspaceId, category),
+          category,
+          description: `${category} — Job ${job.jobNumber}${job.customerName ? ` — ${job.customerName}` : ""}`,
+          amount,
+          paymentMethod: await resolvePaymentMethod(workspaceId, String(job.paymentMethodId || "")),
+          area: String(job.area || ""),
+          relatedModule: "job",
+          relatedId: String(job._id),
+        };
+        if (existingExpense) {
+          Object.assign(existingExpense, payload);
+          existingExpense.updatedAt = new Date();
+          await existingExpense.save();
+          expenseIds.push(existingExpense._id.toString());
+        } else {
+          const expense = await ExpenseEntry.create({
+            workspaceId,
+            ...payload,
+            createdBy: String(job.createdBy || ""),
+          });
+          expenseIds.push(expense._id.toString());
+          expenseCount++;
+        }
+      }
+      job.expenseId = expenseIds[0] || "";
       await JobOrder.collection.updateOne(
         { _id: job._id },
-        { $set: { revenueId: rev._id.toString() } },
+        {
+          $set: {
+            subtotal: Number(job.subtotal || 0),
+            laborCost: 0,
+            otherCharges: 0,
+            discountAmount: Number(job.discountAmount || 0),
+            totalAmount: Number(job.totalAmount || 0),
+            amountPaid: Number(job.amountPaid || 0),
+            revenueId: String(job.revenueId || ""),
+            expenseId: String(job.expenseId || ""),
+          },
+        },
       );
-      revenueCount++;
     }
 
     // ---- Vehicle expenses -> GAS / SASAKYAN expenses ----

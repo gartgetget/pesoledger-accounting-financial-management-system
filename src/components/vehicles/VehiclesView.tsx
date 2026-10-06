@@ -21,7 +21,7 @@ export const VehiclesView: React.FC = () => {
     areas,
     addVehicle,
     deleteVehicle,
-    addVehicleExpense,
+    addVehicleExpensesBatch,
     deleteVehicleExpense,
     userRole,
   } = useAccounting();
@@ -38,11 +38,12 @@ export const VehiclesView: React.FC = () => {
   // Log expense form
   const [logVehId, setLogVehId] = useState(vehicles[0]?.id || '');
   const [logDate, setLogDate] = useState(getTodayDateString());
-  const [logType, setLogType] = useState<'Fuel/Gas' | 'Maintenance' | 'Repairs' | 'Toll' | 'Parking' | 'Other'>('Fuel/Gas');
   const [logDesc, setLogDesc] = useState('');
-  const [logAmount, setLogAmount] = useState('');
+  const [logLines, setLogLines] = useState([
+    { expenseType: 'Fuel/Gas' as const, amount: '', paymentMethodId: paymentMethods[0]?.id || '' },
+    { expenseType: 'Maintenance' as const, amount: '', paymentMethodId: paymentMethods[0]?.id || '' },
+  ]);
   const [logDriver, setLogDriver] = useState('');
-  const [logPaymentId, setLogPaymentId] = useState(paymentMethods[0]?.id || 'pm-1');
   const [logArea, setLogArea] = useState('');
   const [logNotes, setLogNotes] = useState('');
 
@@ -65,36 +66,39 @@ export const VehiclesView: React.FC = () => {
 
   const handleLogVehicleExpense = async (e: React.FormEvent) => {
     e.preventDefault();
-    const amt = parseNumber(logAmount);
     const selectedVeh = vehicles.find((v) => v.id === logVehId);
-    if (!selectedVeh || amt <= 0) {
-      alert('Please enter valid vehicle and amount.');
+    if (!selectedVeh || logLines.some((line) => parseNumber(line.amount) <= 0 || !line.paymentMethodId)) {
+      alert('Please choose an expense type, positive amount, and payment method for both lines.');
       return;
     }
 
-    const saved = await addVehicleExpense({
+    const shared = {
       vehicleId: selectedVeh.id,
       vehicleName: `${selectedVeh.vehicleName} (${selectedVeh.plateNumber})`,
       date: logDate,
-      expenseType: logType,
-      description: logDesc.trim() || `${logType} - ${selectedVeh.vehicleName}`,
-      amount: amt,
       driverResponsible: logDriver.trim() || selectedVeh.assignedDriver || 'Driver',
-      paymentMethodId: logPaymentId,
       area: logArea,
       notes: logNotes.trim(),
-    });
+    };
+    const saved = await addVehicleExpensesBatch(logLines.map((line) => ({
+      ...shared,
+      expenseType: line.expenseType,
+      description: logDesc.trim() || `${line.expenseType} - ${selectedVeh.vehicleName}`,
+      amount: parseNumber(line.amount),
+      paymentMethodId: line.paymentMethodId,
+    })));
 
     if (!saved) return;
 
     setLogDesc('');
-    setLogAmount('');
+    setLogLines([
+      { expenseType: 'Fuel/Gas', amount: '', paymentMethodId: paymentMethods[0]?.id || '' },
+      { expenseType: 'Maintenance', amount: '', paymentMethodId: paymentMethods[0]?.id || '' },
+    ]);
     setLogDate(getTodayDateString());
-    setLogType('Fuel/Gas');
     setLogDriver('');
     setLogArea('');
     setLogNotes('');
-    if (paymentMethods.length > 0) setLogPaymentId(paymentMethods[0].id);
     setShowLogExpenseModal(false);
   };
 
@@ -105,10 +109,15 @@ export const VehiclesView: React.FC = () => {
   }, [vehicles, logVehId]);
 
   useEffect(() => {
-    if (paymentMethods.length > 0 && !paymentMethods.some((p) => p.id === logPaymentId)) {
-      setLogPaymentId(paymentMethods[0].id);
+    if (paymentMethods.length > 0) {
+      setLogLines((current) => current.map((line) => ({
+        ...line,
+        paymentMethodId: paymentMethods.some((method) => method.id === line.paymentMethodId)
+          ? line.paymentMethodId
+          : paymentMethods[0].id,
+      })));
     }
-  }, [paymentMethods, logPaymentId]);
+  }, [paymentMethods]);
 
   const totalFuel = vehicleExpenses
     .filter((v) => v.expenseType === 'Fuel/Gas')
@@ -364,24 +373,71 @@ export const VehiclesView: React.FC = () => {
                     required
                   />
                 </div>
+              </div>
 
-                <div>
-                  <label className="block text-xs font-medium text-slate-700 mb-1">
-                    Expense Type <span className="text-rose-500">*</span>
-                  </label>
-                  <select
-                    value={logType}
-                    onChange={(e) => setLogType(e.target.value as any)}
-                    className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg bg-white font-semibold"
-                  >
-                    <option value="Fuel/Gas">Fuel / Gas</option>
-                    <option value="Maintenance">Maintenance / PMS</option>
-                    <option value="Repairs">Repairs & Tires</option>
-                    <option value="Toll">Toll Fees (RFID)</option>
-                    <option value="Parking">Parking Fee</option>
-                    <option value="Other">Other Sasakyan Cost</option>
-                  </select>
-                </div>
+              <div className="space-y-2">
+                {logLines.map((line, index) => (
+                  <div key={index} className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                    <h4 className="mb-2 text-xs font-bold text-slate-800">Expense {index + 1}</h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      <div>
+                        <label className="block text-xs font-medium text-slate-700 mb-1">
+                          Expense Type <span className="text-rose-500">*</span>
+                        </label>
+                        <select
+                          value={line.expenseType}
+                          onChange={(e) => setLogLines((current) => current.map((item, itemIndex) =>
+                            itemIndex === index ? { ...item, expenseType: e.target.value as typeof item.expenseType } : item
+                          ))}
+                          className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg bg-white font-semibold"
+                          required
+                        >
+                          <option value="Fuel/Gas">Fuel / Gas</option>
+                          <option value="Maintenance">Maintenance / PMS</option>
+                          <option value="Repairs">Repairs & Tires</option>
+                          <option value="Toll">Toll Fees (RFID)</option>
+                          <option value="Parking">Parking Fee</option>
+                          <option value="Other">Other Sasakyan Cost</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-slate-700 mb-1">
+                          Amount (₱) <span className="text-rose-500">*</span>
+                        </label>
+                        <input
+                          type="number"
+                          min="0.01"
+                          step="any"
+                          value={line.amount}
+                          onChange={(e) => setLogLines((current) => current.map((item, itemIndex) =>
+                            itemIndex === index ? { ...item, amount: e.target.value } : item
+                          ))}
+                          placeholder="0.00"
+                          className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg font-mono font-bold text-orange-700"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-slate-700 mb-1">
+                          Payment Method <span className="text-rose-500">*</span>
+                        </label>
+                        <select
+                          value={line.paymentMethodId}
+                          onChange={(e) => setLogLines((current) => current.map((item, itemIndex) =>
+                            itemIndex === index ? { ...item, paymentMethodId: e.target.value } : item
+                          ))}
+                          className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg bg-white"
+                          required
+                        >
+                          <option value="">Select payment method</option>
+                          {paymentMethods.map((method) => (
+                            <option key={method.id} value={method.id}>{method.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
 
               <div>
@@ -396,40 +452,6 @@ export const VehiclesView: React.FC = () => {
                   className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg"
                   required
                 />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-xs font-medium text-slate-700 mb-1">
-                    Amount (₱) <span className="text-rose-500">*</span>
-                  </label>
-                  <input
-                    type="number"
-                    step="any"
-                    value={logAmount}
-                    onChange={(e) => setLogAmount(e.target.value)}
-                    placeholder="0.00"
-                    className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg font-mono font-bold text-orange-700"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-slate-700 mb-1">
-                    Payment Method
-                  </label>
-                  <select
-                    value={logPaymentId}
-                    onChange={(e) => setLogPaymentId(e.target.value)}
-                    className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg bg-white"
-                  >
-                    {paymentMethods.map((pm) => (
-                      <option key={pm.id} value={pm.id}>
-                        {pm.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
               </div>
 
               <div>

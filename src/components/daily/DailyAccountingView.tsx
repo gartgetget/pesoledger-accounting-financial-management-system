@@ -20,6 +20,8 @@ import {
   getTodayDateString,
   formatDateDisplay,
   getDateRangeFromPreset,
+  parseDateString,
+  formatDateString,
 } from '../../utils/date';
 import { ExpenseModal } from '../expenses/ExpenseModal';
 
@@ -33,7 +35,6 @@ export const DailyAccountingView: React.FC<{
     paymentMethods,
     expenseCategories,
     areas,
-    serviceJobs,
     addExpense,
     getSummaryForRange,
   } = useAccounting();
@@ -96,12 +97,6 @@ export const DailyAccountingView: React.FC<{
     });
 
     const costByArea: Record<string, number> = {};
-    serviceJobs
-      .filter((j) => j.date === selectedDate)
-      .forEach((j) => {
-        const key = j.area || 'Unassigned';
-        costByArea[key] = (costByArea[key] || 0) + (j.partsCostAmount || 0);
-      });
     dailyExpensesList
       .filter((e) => e.relatedModule !== 'salary')
       .forEach((e) => {
@@ -125,7 +120,7 @@ export const DailyAccountingView: React.FC<{
       totalCollections: rows.reduce((s, r) => s + r.collections, 0),
       totalCosts: rows.reduce((s, r) => s + r.costs, 0),
     };
-  }, [dailyRevenue, dailyExpensesList, serviceJobs, selectedDate, areas]);
+  }, [dailyRevenue, dailyExpensesList, selectedDate, areas]);
 
   const handleQuickAddExpense = (e: React.FormEvent) => {
     e.preventDefault();
@@ -174,9 +169,9 @@ export const DailyAccountingView: React.FC<{
         <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={() => {
-              const d = new Date(selectedDate);
+              const d = parseDateString(selectedDate);
               d.setDate(d.getDate() - 1);
-              setSelectedDate(d.toISOString().split('T')[0]);
+              setSelectedDate(formatDateString(d));
             }}
             className="px-2.5 py-1.5 border border-slate-200 hover:bg-slate-50 rounded-lg text-xs font-medium cursor-pointer"
           >
@@ -199,9 +194,9 @@ export const DailyAccountingView: React.FC<{
 
           <button
             onClick={() => {
-              const d = new Date(selectedDate);
+              const d = parseDateString(selectedDate);
               d.setDate(d.getDate() + 1);
-              setSelectedDate(d.toISOString().split('T')[0]);
+              setSelectedDate(formatDateString(d));
             }}
             className="px-2.5 py-1.5 border border-slate-200 hover:bg-slate-50 rounded-lg text-xs font-medium cursor-pointer"
           >
@@ -469,7 +464,7 @@ export const DailyAccountingView: React.FC<{
             <MapPin className="w-4 h-4 text-indigo-600" />
             <h3 className="text-xs font-bold text-slate-900">Per-Area Breakdown on {formatDateDisplay(selectedDate)}</h3>
           </div>
-          <span className="text-[11px] text-slate-500">Collections vs job & tagged expense costs</span>
+          <span className="text-[11px] text-slate-500">Collections vs recorded expense costs</span>
         </div>
 
         <div className="overflow-x-auto">

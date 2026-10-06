@@ -9,21 +9,21 @@ import {
 } from 'lucide-react';
 import { useAccounting } from '../../context/AccountingContext';
 import { formatPHP } from '../../utils/currency';
-import { getMonthName, getTodayDateString, formatDateDisplay } from '../../utils/date';
+import { getMonthName, getTodayDateString, formatDateDisplay, formatDateString } from '../../utils/date';
 import { CategoryHorizontalBars, PaymentMethodDistribution } from '../dashboard/Charts';
 import { exportToExcel } from '../../utils/excel';
 
 export const MonthlyAccountingView: React.FC = () => {
   const { revenueTransactions, expenses, getSummaryForRange } = useAccounting();
 
-  const today = new Date(getTodayDateString());
-  const [selectedYear, setSelectedYear] = useState(today.getFullYear());
-  const [selectedMonth, setSelectedMonth] = useState(today.getMonth()); // 0-11
+  const today = getTodayDateString().split('-').map(Number);
+  const [selectedYear, setSelectedYear] = useState(today[0]);
+  const [selectedMonth, setSelectedMonth] = useState(today[1] - 1); // 0-11
 
   // Start & End of Selected Month
   const monthRange = useMemo(() => {
-    const start = new Date(selectedYear, selectedMonth, 1).toISOString().split('T')[0];
-    const end = new Date(selectedYear, selectedMonth + 1, 0).toISOString().split('T')[0];
+    const start = formatDateString(new Date(selectedYear, selectedMonth, 1));
+    const end = formatDateString(new Date(selectedYear, selectedMonth + 1, 0));
     return { startDate: start, endDate: end };
   }, [selectedYear, selectedMonth]);
 
