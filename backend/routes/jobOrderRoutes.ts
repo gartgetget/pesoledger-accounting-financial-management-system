@@ -26,7 +26,7 @@ const sanitizeCustomers = (raw: unknown): Array<{
   amountCollected: number;
   paymentMethodId: string;
   serviceCategory: string;
-  parts: Array<{ sku: string; invoice: string; description: string; price: number }>;
+  parts: Array<{ sku: string; invoice: string; description: string; price: number; paymentMethodId: string }>;
   installationMaterials: string;
   installationMaterialsPrice: number;
   referral: string;
@@ -39,7 +39,7 @@ const sanitizeCustomers = (raw: unknown): Array<{
     amountCollected: number;
     paymentMethodId: string;
     serviceCategory: string;
-    parts: Array<{ sku: string; invoice: string; description: string; price: number }>;
+    parts: Array<{ sku: string; invoice: string; description: string; price: number; paymentMethodId: string }>;
     installationMaterials: string;
     installationMaterialsPrice: number;
     referral: string;
@@ -83,9 +83,9 @@ const sanitizeCustomers = (raw: unknown): Array<{
   return customers;
 };
 
-const sanitizeParts = (raw: unknown): Array<{ sku: string; invoice: string; description: string; price: number }> | null => {
+const sanitizeParts = (raw: unknown): Array<{ sku: string; invoice: string; description: string; price: number; paymentMethodId: string }> | null => {
   if (!Array.isArray(raw)) return null;
-  const parts: Array<{ sku: string; invoice: string; description: string; price: number }> = [];
+  const parts: Array<{ sku: string; invoice: string; description: string; price: number; paymentMethodId: string }> = [];
 
   for (const item of raw) {
     if (!item || typeof item !== "object") return null;
@@ -98,6 +98,7 @@ const sanitizeParts = (raw: unknown): Array<{ sku: string; invoice: string; desc
       invoice: String(part.invoice || "").trim(),
       description: String(part.description || "").trim(),
       price,
+      paymentMethodId: String(part.paymentMethodId || "").trim(),
     };
     if (sanitized.sku || sanitized.invoice || sanitized.description || sanitized.price > 0) {
       parts.push(sanitized);
@@ -174,6 +175,28 @@ const getJobExpenseAmounts = (job: JobOrderDoc) => {
   };
 };
 
+const getJobPartsByPaymentMethod = (job: JobOrderDoc) => {
+  const amounts = new Map<string, number>();
+  const customers = Array.isArray(job.customers) ? job.customers : [];
+  const addParts = (parts: Array<{ price?: number; paymentMethodId?: string }>, fallbackMethod: string) => {
+    for (const part of parts || []) {
+      const amount = Number(part.price) || 0;
+      if (amount <= 0) continue;
+      const paymentMethod = part.paymentMethodId || fallbackMethod || "Cash";
+      amounts.set(paymentMethod, (amounts.get(paymentMethod) || 0) + amount);
+    }
+  };
+
+  if (customers.length > 0) {
+    for (const customer of customers) {
+      addParts(customer.parts || [], customer.paymentMethodId || job.paymentMethodId || "Cash");
+    }
+  } else {
+    addParts(job.parts || [], job.paymentMethodId || "Cash");
+  }
+  return [...amounts].map(([paymentMethod, amount]) => ({ paymentMethod, amount }));
+};
+
 const syncJobRevenue = async (workspaceId: string, job: JobOrderDoc, createdBy: string) => {
   const relatedId = job._id.toString();
   const lines = job.status === "cancelled" ? [] : getJobRevenueLines(job);
@@ -211,52 +234,58 @@ const syncJobExpenses = async (workspaceId: string, job: JobOrderDoc, createdBy:
   const relatedId = job._id.toString();
   const shouldPost = job.status !== "cancelled";
   const amounts = getJobExpenseAmounts(job);
-  const expenseAmounts = [
-    {
-      category: "REFERRAL",
-      amount: shouldPost ? amounts.referral : 0,
-    },
-    {
-      category: "PARTS / MATERIALS",
-      amount: shouldPost ? amounts.parts : 0,
-    },
-  ];
+  const expenseAmounts = shouldPost
+    ? [
+        ...(amounts.referral > 0
+          ? [{ category: "REFERRAL", amount: amounts.referral, paymentMethod: job.paymentMethodId || "Cash" }]
+          : []),
+        ...getJobPartsByPaymentMethod(job).map(({ paymentMethod, amount }) => ({
+          category: "PARTS / MATERIALS",
+          amount,
+          paymentMethod,
+        })),
+      ]
+    : [];
   const linkedExpenses: string[] = [];
 
-  for (const { category, amount } of expenseAmounts) {
+  for (const category of ["REFERRAL", "PARTS / MATERIALS"]) {
     const query = { workspaceId, relatedModule: "job", relatedId, category };
     const existingExpenses = await ExpenseEntry.find(query).sort({ createdAt: 1 });
-    if (amount <= 0) {
-      if (existingExpenses.length > 0) {
-        await ExpenseEntry.deleteMany(query);
+    const remaining = [...existingExpenses];
+    const desired = expenseAmounts.filter((expense) => expense.category === category);
+    for (const { amount, paymentMethod } of desired) {
+      const matchIndex = remaining.findIndex((expense) => expense.paymentMethod === paymentMethod);
+      const legacyIndex = matchIndex < 0 && desired.length === 1 && remaining.length === 1 ? 0 : matchIndex;
+      const existing = legacyIndex >= 0 ? remaining.splice(legacyIndex, 1)[0] : null;
+      const payload = {
+        date: job.date,
+        categoryId: await ensureJobExpenseCategory(workspaceId, category),
+        category,
+        description: `${category} — Job ${job.jobNumber}${job.customerName ? ` — ${job.customerName}` : ""}`,
+        amount,
+        paymentMethod,
+        area: job.area || "",
+        relatedModule: "job",
+        relatedId,
+      };
+      if (existing) {
+        Object.assign(existing, payload);
+        existing.updatedAt = new Date();
+        await existing.save();
+        linkedExpenses.push(existing._id.toString());
+      } else {
+        const expense = await ExpenseEntry.create({ workspaceId, ...payload, createdBy });
+        linkedExpenses.push(expense._id.toString());
       }
-      continue;
     }
-
-    const payload = {
-      date: job.date,
-      categoryId: await ensureJobExpenseCategory(workspaceId, category),
-      category,
-      description: `${category} — Job ${job.jobNumber}${job.customerName ? ` — ${job.customerName}` : ""}`,
-      amount,
-      paymentMethod: job.paymentMethodId || "Cash",
-      area: job.area || "",
-      relatedModule: "job",
-      relatedId,
-    };
-
-    const existing = existingExpenses[0];
-    if (existing) {
-      Object.assign(existing, payload);
-      existing.updatedAt = new Date();
-      await existing.save();
-      linkedExpenses.push(existing._id.toString());
-      if (existingExpenses.length > 1) {
-        await ExpenseEntry.deleteMany({ ...query, _id: { $ne: existing._id } });
-      }
-    } else {
-      const expense = await ExpenseEntry.create({ workspaceId, ...payload, createdBy });
-      linkedExpenses.push(expense._id.toString());
+    if (remaining.length > 0) {
+      await ExpenseEntry.deleteMany({
+        ...query,
+        _id: { $in: remaining.map((expense) => expense._id) },
+      });
+    }
+    if (desired.length === 0 && existingExpenses.length > 0) {
+      await ExpenseEntry.deleteMany(query);
     }
   }
 
@@ -379,49 +408,57 @@ const reconcileWorkspaceJobLedger = async (workspaceId: string, createdBy: strin
     }
 
     const expenseAmounts = getJobExpenseAmounts(job as JobOrderDoc);
-    const amounts = {
-      REFERRAL: expenseAmounts.referral,
-      "PARTS / MATERIALS": expenseAmounts.parts,
+    const amounts: Record<string, Array<{ amount: number; paymentMethod: string }>> = {
+      REFERRAL: expenseAmounts.referral > 0
+        ? [{ amount: expenseAmounts.referral, paymentMethod: job.paymentMethodId || "Cash" }]
+        : [],
+      "PARTS / MATERIALS": getJobPartsByPaymentMethod(job as JobOrderDoc),
     };
 
-    for (const [category, amount] of Object.entries(amounts)) {
+    for (const [category, desired] of Object.entries(amounts)) {
       const query = { workspaceId, relatedModule: "job", relatedId, category };
       const key = `${relatedId}:${category}`;
       const existing = expensesByJobCategory.get(key) || [];
-      if (job.status === "cancelled" || amount <= 0) {
-        if (existing.length > 0) {
-          operations.push({ deleteMany: { filter: query } });
-        }
+      if (job.status === "cancelled" || desired.length === 0) {
+        if (existing.length > 0) operations.push({ deleteMany: { filter: query } });
         continue;
       }
 
-      if (category === "REFERRAL") referralTotal += amount;
-      if (category === "PARTS / MATERIALS") partsMaterialsTotal += amount;
-      operations.push({
-        updateOne: {
-          filter: existing[0] ? { _id: existing[0]._id } : query,
-          update: {
-            $set: {
-              date: job.date,
-              categoryId: categoryIds.get(category) || "",
-              category,
-              description: `${category} — Job ${job.jobNumber}${job.customerName ? ` — ${job.customerName}` : ""}`,
-              amount,
-              paymentMethod: job.paymentMethodId || "Cash",
-              area: job.area || "",
-              relatedModule: "job",
-              relatedId,
-              updatedAt: now,
+      const remaining = [...existing];
+      for (const line of desired) {
+        const matchIndex = remaining.findIndex((expense) => expense.paymentMethod === line.paymentMethod);
+        const legacyIndex = matchIndex < 0 && desired.length === 1 && remaining.length === 1 ? 0 : matchIndex;
+        const matched = legacyIndex >= 0 ? remaining.splice(legacyIndex, 1)[0] : null;
+        if (category === "REFERRAL") referralTotal += line.amount;
+        if (category === "PARTS / MATERIALS") partsMaterialsTotal += line.amount;
+        operations.push({
+          updateOne: {
+            filter: matched
+              ? { _id: matched._id, workspaceId }
+              : { ...query, paymentMethod: line.paymentMethod },
+            update: {
+              $set: {
+                date: job.date,
+                categoryId: categoryIds.get(category) || "",
+                category,
+                description: `${category} — Job ${job.jobNumber}${job.customerName ? ` — ${job.customerName}` : ""}`,
+                amount: line.amount,
+                paymentMethod: line.paymentMethod,
+                area: job.area || "",
+                relatedModule: "job",
+                relatedId,
+                updatedAt: now,
+              },
+              $setOnInsert: { workspaceId, createdBy: job.createdBy || createdBy, createdAt: now },
             },
-            $setOnInsert: { workspaceId, createdBy, createdAt: now },
+            upsert: true,
           },
-          upsert: true,
-        },
-      });
-      if (existing.length > 1) {
+        });
+      }
+      if (remaining.length > 0) {
         operations.push({
           deleteMany: {
-            filter: { ...query, _id: { $in: existing.slice(1).map((expense) => expense._id) } },
+            filter: { ...query, _id: { $in: remaining.map((expense) => expense._id) } },
           },
         });
       }

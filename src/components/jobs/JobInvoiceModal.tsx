@@ -34,7 +34,13 @@ export const JobInvoiceModal: React.FC<JobInvoiceModalProps> = ({ job, onClose }
       .filter((part) => part.price > 0)
       .map((part, partIndex) => ({
         key: `part-${customerIndex}-${partIndex}`,
-        label: [part.description || 'Part / Material', part.sku && `SKU ${part.sku}`, part.invoice && `Invoice ${part.invoice}`]
+        label: [
+          part.description || 'Part / Material',
+          part.sku && `SKU ${part.sku}`,
+          part.invoice && `Invoice ${part.invoice}`,
+          (part.paymentMethodId || customer.paymentMethodId) &&
+            `Paid via ${getMethodName(part.paymentMethodId || customer.paymentMethodId)}`,
+        ]
           .filter(Boolean)
           .join(' · '),
         customerName: customer.name,
@@ -62,7 +68,7 @@ export const JobInvoiceModal: React.FC<JobInvoiceModalProps> = ({ job, onClose }
     .filter((expense) => expense.category.toUpperCase().includes('PARTS') || expense.category.toUpperCase().includes('MATERIALS'))
     .map((expense) => ({
       key: expense.id,
-      label: expense.description || expense.category,
+      label: `${expense.description || expense.category} · Paid via ${getMethodName(expense.paymentMethodId)}`,
       customerName: '',
       amount: expense.amount,
     }));

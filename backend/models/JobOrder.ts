@@ -21,6 +21,7 @@ export interface IJobOrder {
       invoice: string;
       description: string;
       price: number;
+      paymentMethodId?: string;
     }>;
     installationMaterials: string;
     installationMaterialsPrice: number;
@@ -36,6 +37,7 @@ export interface IJobOrder {
     invoice: string;
     description: string;
     price: number;
+    paymentMethodId?: string;
   }>;
   laborCost: number;
   otherCharges: number;
@@ -79,6 +81,7 @@ const jobOrderSchema = new mongoose.Schema<IJobOrder>(
               invoice: { type: String, default: "" },
               description: { type: String, default: "" },
               price: { type: Number, min: 0, default: 0 },
+              paymentMethodId: { type: String, default: "" },
             },
           ],
           default: [],
@@ -108,6 +111,7 @@ const jobOrderSchema = new mongoose.Schema<IJobOrder>(
           invoice: { type: String, default: "" },
           description: { type: String, default: "" },
           price: { type: Number, min: 0, default: 0 },
+          paymentMethodId: { type: String, default: "" },
         },
       ],
       default: [],

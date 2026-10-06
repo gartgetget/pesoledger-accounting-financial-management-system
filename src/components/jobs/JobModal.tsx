@@ -57,7 +57,11 @@ export const JobModal: React.FC<JobModalProps> = ({
         ...customer,
         paymentMethodId: customer.paymentMethodId || editItem.paymentMethodId || paymentMethods[0]?.id || '',
         serviceCategory: customer.serviceCategory || serviceCategories[0]?.name || '',
-        parts: customer.parts || [],
+        parts: (customer.parts || []).map((part) => ({
+          ...part,
+          paymentMethodId:
+            part.paymentMethodId || customer.paymentMethodId || editItem.paymentMethodId || paymentMethods[0]?.id || '',
+        })),
         installationMaterials: customer.installationMaterials || '',
         installationMaterialsPrice: customer.installationMaterialsPrice || 0,
         referral: customer.referral || '',
@@ -152,7 +156,16 @@ export const JobModal: React.FC<JobModalProps> = ({
 
   const addPartRow = (customerIndex: number) => {
     setJobCustomers((prev) => prev.map((customer, i) => i === customerIndex
-      ? { ...customer, parts: [...customer.parts, { sku: '', invoice: '', description: '', price: 0 }] }
+      ? {
+          ...customer,
+          parts: [...customer.parts, {
+            sku: '',
+            invoice: '',
+            description: '',
+            price: 0,
+            paymentMethodId: customer.paymentMethodId || paymentMethods[0]?.id || '',
+          }],
+        }
       : customer));
   };
 
@@ -486,7 +499,7 @@ export const JobModal: React.FC<JobModalProps> = ({
                     </span>
                   </div>
                   {row.parts.map((part, partIdx) => (
-                    <div key={partIdx} className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_2fr_1fr_auto] gap-2 items-end">
+                    <div key={partIdx} className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_2fr_1fr_1fr_auto] gap-2 items-end">
                       <input
                         type="text"
                         value={part.sku}
@@ -521,6 +534,17 @@ export const JobModal: React.FC<JobModalProps> = ({
                         aria-label={`Customer ${idx + 1} part price`}
                         className="w-full min-w-0 text-xs px-2.5 py-1.5 border border-slate-300 rounded-lg font-mono"
                       />
+                      <select
+                        value={part.paymentMethodId || row.paymentMethodId || paymentMethods[0]?.id || ''}
+                        onChange={(e) => updatePartRow(idx, partIdx, { paymentMethodId: e.target.value })}
+                        aria-label={`Customer ${idx + 1} part payment method`}
+                        className="w-full min-w-0 text-xs px-2.5 py-1.5 border border-slate-300 rounded-lg bg-white"
+                      >
+                        <option value="">Select method</option>
+                        {paymentMethods.map((method) => (
+                          <option key={method.id} value={method.id}>{method.name}</option>
+                        ))}
+                      </select>
                       <button
                         type="button"
                         onClick={() => removePartRow(idx, partIdx)}

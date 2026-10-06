@@ -130,6 +130,7 @@ export interface JobPartLine {
   invoice: string;
   description: string;
   price: number;
+  paymentMethodId?: string;
 }
 
 export interface ServiceJob {

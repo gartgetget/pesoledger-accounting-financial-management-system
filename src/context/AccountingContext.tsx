@@ -158,6 +158,7 @@ function mapBackendJob(order: any): ServiceJob {
         invoice: String(part.invoice || ''),
         description: String(part.description || ''),
         price: Number(part.price || 0),
+        paymentMethodId: String(part.paymentMethodId || order.paymentMethodId || ''),
       }))
     : [];
   const mapCustomer = (customer: any) => ({
@@ -172,6 +173,7 @@ function mapBackendJob(order: any): ServiceJob {
           invoice: String(part.invoice || ''),
           description: String(part.description || ''),
           price: Number(part.price || 0),
+          paymentMethodId: String(part.paymentMethodId || customer.paymentMethodId || order.paymentMethodId || ''),
         }))
       : [],
     installationMaterials: customer.installationMaterials || '',
