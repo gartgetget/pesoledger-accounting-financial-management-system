@@ -97,15 +97,15 @@ export const DashboardView: React.FC<{
     const inRange = serviceJobs.filter((j) => isDateInRange(j.date, dateRange));
     const completed = inRange.filter((j) => j.status === 'completed');
     const inProgress = inRange.filter((j) => j.status === 'open' || j.status === 'in_progress');
-    const jobCollections = completed.reduce((s, j) => s + (j.amountPaid || 0), 0);
-    const recentCompleted = [...completed]
+    const jobCollections = inRange.reduce((s, j) => s + (j.amountPaid || 0), 0);
+    const recentJobs = [...inRange]
       .sort((a, b) => b.date.localeCompare(a.date))
       .slice(0, 5);
     return {
       completedCount: completed.length,
       inProgressCount: inProgress.length,
       jobCollections,
-      recentCompleted,
+      recentJobs,
     };
   }, [serviceJobs, dateRange]);
 
@@ -458,51 +458,51 @@ export const DashboardView: React.FC<{
       </div>
 
       {/* SERVICE JOBS, VEHICLE EXPENSES & AREA PANELS */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-4 xl:gap-5">
         {/* Service Job Orders */}
         <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center">
+          <div className="flex items-start justify-between gap-2 mb-4">
+            <div className="flex min-w-0 flex-1 items-center gap-2">
+              <div className="w-8 h-8 shrink-0 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center">
                 <Wrench className="w-4 h-4" />
               </div>
-              <div>
+              <div className="min-w-0">
                 <h3 className="text-sm font-bold text-slate-900">Service Job Orders</h3>
-                <p className="text-xs text-slate-500">Collections from completed jobs in period</p>
+                <p className="text-xs text-slate-500">Collections recorded for jobs in period</p>
               </div>
             </div>
             <button
               onClick={() => setActiveTab('jobs')}
-              className="text-xs text-indigo-600 hover:text-indigo-800 font-medium cursor-pointer"
+              className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-xs text-indigo-600 hover:text-indigo-800 font-medium cursor-pointer"
             >
-              View all →
+              View all <ChevronRight className="h-3.5 w-3.5" />
             </button>
           </div>
 
-          <div className="grid grid-cols-3 gap-3 mb-4">
-            <div className="bg-emerald-50 border border-emerald-100 rounded-lg p-3">
+          <div className="grid grid-cols-3 gap-2 sm:gap-3 mb-4">
+            <div className="min-w-0 bg-emerald-50 border border-emerald-100 rounded-lg p-2 sm:p-3">
               <span className="text-[10px] font-semibold text-emerald-600 uppercase tracking-wider block">Completed</span>
-              <p className="text-lg font-bold text-emerald-700 font-mono tabular-nums mt-0.5">
+              <p className="text-base xl:text-lg font-bold text-emerald-700 font-mono tabular-nums mt-0.5">
                 {jobsPanel.completedCount}
               </p>
             </div>
-            <div className="bg-amber-50 border border-amber-100 rounded-lg p-3">
+            <div className="min-w-0 bg-amber-50 border border-amber-100 rounded-lg p-2 sm:p-3">
               <span className="text-[10px] font-semibold text-amber-600 uppercase tracking-wider block">In Progress</span>
-              <p className="text-lg font-bold text-amber-700 font-mono tabular-nums mt-0.5">
+              <p className="text-base xl:text-lg font-bold text-amber-700 font-mono tabular-nums mt-0.5">
                 {jobsPanel.inProgressCount}
               </p>
             </div>
-            <div className="bg-indigo-50 border border-indigo-100 rounded-lg p-3">
+            <div className="min-w-0 bg-indigo-50 border border-indigo-100 rounded-lg p-2 sm:p-3">
               <span className="text-[10px] font-semibold text-indigo-600 uppercase tracking-wider block">Collections</span>
-              <p className="text-lg font-bold text-indigo-700 font-mono tabular-nums mt-0.5">
+              <p className="whitespace-nowrap text-xs 2xl:text-sm font-bold text-indigo-700 font-mono tabular-nums mt-0.5">
                 {formatPHP(jobsPanel.jobCollections)}
               </p>
             </div>
           </div>
 
-          {jobsPanel.recentCompleted.length === 0 ? (
+          {jobsPanel.recentJobs.length === 0 ? (
             <p className="text-xs text-slate-400 text-center py-4">
-              No completed job orders in this period.
+              No job orders in this period.
             </p>
           ) : (
             <div className="overflow-x-auto">
@@ -516,7 +516,7 @@ export const DashboardView: React.FC<{
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
-                  {jobsPanel.recentCompleted.map((j) => (
+                  {jobsPanel.recentJobs.map((j) => (
                     <tr key={j.id} className="hover:bg-slate-50/70">
                       <td className="py-2 pr-3 font-semibold text-slate-700 whitespace-nowrap">{j.jobNumber}</td>
                       <td className="py-2 pr-3 text-slate-600 truncate max-w-[120px]">{j.customerName || 'Walk-in'}</td>
@@ -534,40 +534,40 @@ export const DashboardView: React.FC<{
 
         {/* Vehicle Expenses */}
         <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-orange-100 text-orange-700 flex items-center justify-center">
+          <div className="flex items-start justify-between gap-2 mb-4">
+            <div className="flex min-w-0 flex-1 items-center gap-2">
+              <div className="w-8 h-8 shrink-0 rounded-lg bg-orange-100 text-orange-700 flex items-center justify-center">
                 <Fuel className="w-4 h-4" />
               </div>
-              <div>
+              <div className="min-w-0">
                 <h3 className="text-sm font-bold text-slate-900">Vehicle Expenses</h3>
                 <p className="text-xs text-slate-500">Fuel, maintenance, toll & repairs in period</p>
               </div>
             </div>
             <button
               onClick={() => setActiveTab('vehicles')}
-              className="text-xs text-orange-600 hover:text-orange-800 font-medium cursor-pointer"
+              className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-xs text-orange-600 hover:text-orange-800 font-medium cursor-pointer"
             >
-              View all →
+              View all <ChevronRight className="h-3.5 w-3.5" />
             </button>
           </div>
 
-          <div className="grid grid-cols-3 gap-3 mb-4">
-            <div className="bg-orange-50 border border-orange-100 rounded-lg p-3">
+          <div className="grid grid-cols-3 gap-2 sm:gap-3 mb-4">
+            <div className="min-w-0 bg-orange-50 border border-orange-100 rounded-lg p-2 sm:p-3">
               <span className="text-[10px] font-semibold text-orange-600 uppercase tracking-wider block">Total</span>
-              <p className="text-lg font-bold text-orange-700 font-mono tabular-nums mt-0.5">
+              <p className="whitespace-nowrap text-xs 2xl:text-sm font-bold text-orange-700 font-mono tabular-nums mt-0.5">
                 {formatPHP(vehiclePanel.vehicleTotal)}
               </p>
             </div>
-            <div className="bg-amber-50 border border-amber-100 rounded-lg p-3">
+            <div className="min-w-0 bg-amber-50 border border-amber-100 rounded-lg p-2 sm:p-3">
               <span className="text-[10px] font-semibold text-amber-600 uppercase tracking-wider block">Fuel & Gas</span>
-              <p className="text-lg font-bold text-amber-700 font-mono tabular-nums mt-0.5">
+              <p className="whitespace-nowrap text-xs 2xl:text-sm font-bold text-amber-700 font-mono tabular-nums mt-0.5">
                 {formatPHP(vehiclePanel.fuelTotal)}
               </p>
             </div>
-            <div className="bg-sky-50 border border-sky-100 rounded-lg p-3">
+            <div className="min-w-0 bg-sky-50 border border-sky-100 rounded-lg p-2 sm:p-3">
               <span className="text-[10px] font-semibold text-sky-600 uppercase tracking-wider block">Maintenance & Other</span>
-              <p className="text-lg font-bold text-sky-700 font-mono tabular-nums mt-0.5">
+              <p className="whitespace-nowrap text-xs 2xl:text-sm font-bold text-sky-700 font-mono tabular-nums mt-0.5">
                 {formatPHP(vehiclePanel.maintenanceTotal)}
               </p>
             </div>
@@ -618,41 +618,41 @@ export const DashboardView: React.FC<{
         </div>
 
         {/* Collections and expenses by team */}
-        <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center">
+        <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs lg:col-span-2 2xl:col-span-1">
+          <div className="flex items-start justify-between gap-2 mb-4">
+            <div className="flex min-w-0 flex-1 items-center gap-2">
+              <div className="w-8 h-8 shrink-0 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center">
                 <MapPin className="w-4 h-4" />
               </div>
-              <div>
+              <div className="min-w-0">
                 <h3 className="text-sm font-bold text-slate-900">Collections & Expenses by Team</h3>
                 <p className="text-xs text-slate-500">Revenue and recorded expenses by team/area for this period</p>
               </div>
             </div>
             <button
               onClick={() => setActiveTab('revenue')}
-              className="text-xs text-emerald-600 hover:text-emerald-800 font-medium cursor-pointer"
+              className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-xs text-emerald-600 hover:text-emerald-800 font-medium cursor-pointer"
             >
-              View all →
+              View all <ChevronRight className="h-3.5 w-3.5" />
             </button>
           </div>
 
-          <div className="grid grid-cols-3 gap-3 mb-4">
-            <div className="bg-emerald-50 border border-emerald-100 rounded-lg p-3">
+          <div className="grid grid-cols-3 gap-2 sm:gap-3 mb-4">
+            <div className="min-w-0 bg-emerald-50 border border-emerald-100 rounded-lg p-2 sm:p-3">
               <span className="text-[10px] font-semibold text-emerald-600 uppercase tracking-wider block">Collections</span>
-              <p className="text-lg font-bold text-emerald-700 font-mono tabular-nums mt-0.5">
+              <p className="whitespace-nowrap text-xs 2xl:text-sm font-bold text-emerald-700 font-mono tabular-nums mt-0.5">
                 {formatPHP(areaPanel.totalCollections)}
               </p>
             </div>
-            <div className="bg-rose-50 border border-rose-100 rounded-lg p-3">
+            <div className="min-w-0 bg-rose-50 border border-rose-100 rounded-lg p-2 sm:p-3">
               <span className="text-[10px] font-semibold text-rose-600 uppercase tracking-wider block">Costs</span>
-              <p className="text-lg font-bold text-rose-700 font-mono tabular-nums mt-0.5">
+              <p className="whitespace-nowrap text-xs 2xl:text-sm font-bold text-rose-700 font-mono tabular-nums mt-0.5">
                 {formatPHP(areaPanel.totalJobCosts)}
               </p>
             </div>
-            <div className="bg-slate-100 border border-slate-200 rounded-lg p-3">
+            <div className="min-w-0 bg-slate-100 border border-slate-200 rounded-lg p-2 sm:p-3">
               <span className="text-[10px] font-semibold text-slate-600 uppercase tracking-wider block">Net</span>
-              <p className="text-lg font-bold text-slate-800 font-mono tabular-nums mt-0.5">
+              <p className="whitespace-nowrap text-xs 2xl:text-sm font-bold text-slate-800 font-mono tabular-nums mt-0.5">
                 {formatPHP(areaPanel.totalCollections - areaPanel.totalJobCosts)}
               </p>
             </div>
@@ -664,26 +664,26 @@ export const DashboardView: React.FC<{
             </p>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
+              <table className="w-full table-fixed text-left text-[10px]">
                 <thead className="text-slate-400 uppercase tracking-wider font-semibold border-b border-slate-100">
                   <tr>
-                    <th className="py-2 pr-3">Team / Area</th>
-                    <th className="py-2 pr-3 text-right">Collections</th>
-                    <th className="py-2 pr-3 text-right">Expenses</th>
-                    <th className="py-2 text-right">Net</th>
+                    <th className="w-[30%] py-2 pr-1">Team / Area</th>
+                    <th className="w-[24%] py-2 px-1 text-right">Collections</th>
+                    <th className="w-[23%] py-2 px-1 text-right">Expenses</th>
+                    <th className="w-[23%] py-2 pl-1 text-right">Net</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
                   {areaPanel.rows.map((row) => (
                     <tr key={row.name} className="hover:bg-slate-50/70">
-                      <td className="py-2 pr-3 font-semibold text-slate-700 whitespace-nowrap">{row.name}</td>
-                      <td className="py-2 pr-3 text-right font-mono tabular-nums text-emerald-700 font-semibold">
+                      <td className="py-2 pr-1 font-semibold text-slate-700 truncate" title={row.name}>{row.name}</td>
+                      <td className="py-2 px-1 text-right font-mono tabular-nums text-emerald-700 font-semibold whitespace-nowrap">
                         {formatPHP(row.collections)}
                       </td>
-                      <td className="py-2 pr-3 text-right font-mono tabular-nums text-rose-600">
+                      <td className="py-2 px-1 text-right font-mono tabular-nums text-rose-600 whitespace-nowrap">
                         {formatPHP(row.jobCosts)}
                       </td>
-                      <td className="py-2 text-right font-mono tabular-nums font-semibold text-slate-800">
+                      <td className="py-2 pl-1 text-right font-mono tabular-nums font-semibold text-slate-800 whitespace-nowrap">
                         {formatPHP(row.collections - row.jobCosts)}
                       </td>
                     </tr>
@@ -691,14 +691,14 @@ export const DashboardView: React.FC<{
                 </tbody>
                 <tfoot>
                   <tr className="border-t-2 border-slate-200 font-semibold">
-                    <td className="py-2 pr-3 text-slate-600 uppercase text-[10px] tracking-wider">Total</td>
-                    <td className="py-2 pr-3 text-right font-mono tabular-nums text-emerald-700">
+                    <td className="py-2 pr-1 text-slate-600 uppercase text-[10px] tracking-wider">Total</td>
+                    <td className="py-2 px-1 text-right font-mono tabular-nums text-emerald-700 whitespace-nowrap">
                       {formatPHP(areaPanel.totalCollections)}
                     </td>
-                    <td className="py-2 pr-3 text-right font-mono tabular-nums text-rose-600">
+                    <td className="py-2 px-1 text-right font-mono tabular-nums text-rose-600 whitespace-nowrap">
                       {formatPHP(areaPanel.totalJobCosts)}
                     </td>
-                    <td className="py-2 text-right font-mono tabular-nums text-slate-800">
+                    <td className="py-2 pl-1 text-right font-mono tabular-nums text-slate-800 whitespace-nowrap">
                       {formatPHP(areaPanel.totalCollections - areaPanel.totalJobCosts)}
                     </td>
                   </tr>
