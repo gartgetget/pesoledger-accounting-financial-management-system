@@ -370,6 +370,7 @@ export const PayrollView: React.FC = () => {
                   <option value="OJT">OJT</option>
                   <option value="Driver / Logistics">Driver / Logistics</option>
                   <option value="Administrative Staff">Administrative Staff</option>
+                  <option value="Maintenance">Maintenance</option>
                   <option value="HR / Auditing Team">HR / Auditing Team</option>
                 </select>
               </div>
