@@ -42,6 +42,7 @@ const MainAppContent: React.FC = () => {
 
   const [authNotice, setAuthNotice] = useState<string | null>(null);
   const dismissAuthNotice = useCallback(() => setAuthNotice(null), []);
+  const handleReportsInitialTabConsumed = useCallback(() => setReportsInitialTab('pnl'), []);
 
   if (isLoading) {
     return (
@@ -96,7 +97,6 @@ const MainAppContent: React.FC = () => {
     setReportsInitialTab('areas');
     setActiveTab('reports');
   };
-  const handleReportsInitialTabConsumed = useCallback(() => setReportsInitialTab('pnl'), []);
 
   return (
     <div className="flex h-screen bg-slate-50 text-slate-800 font-sans antialiased overflow-hidden">
