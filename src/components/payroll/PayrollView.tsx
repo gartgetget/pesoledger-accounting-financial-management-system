@@ -15,6 +15,7 @@ import { formatDateDisplay } from '../../utils/date';
 import { exportToExcel } from '../../utils/excel';
 import { PayrollModal } from './PayrollModal';
 import { ConfirmModal } from '../layout/ConfirmModal';
+import { CardCarousel } from '../layout/CardCarousel';
 import { PayrollRecord } from '../../types';
 
 export const PayrollView: React.FC = () => {
@@ -41,6 +42,7 @@ export const PayrollView: React.FC = () => {
   const [newEmpRate, setNewEmpRate] = useState('650');
   const [newEmpContact, setNewEmpContact] = useState('');
   const [newEmpArea, setNewEmpArea] = useState('');
+  const activeEmployees = employees.filter((emp) => emp.status !== 'Inactive');
 
   const handleCreateEmployee = (e: React.FormEvent) => {
     e.preventDefault();
@@ -128,62 +130,81 @@ export const PayrollView: React.FC = () => {
       {/* STAFF DIRECTORY ROSTER */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
         <div className="p-4 border-b border-slate-100 flex items-center justify-between">
-          <h2 className="text-xs font-bold text-slate-900">Active Staff & Technician Roster ({employees.length})</h2>
+          <h2 className="text-xs font-bold text-slate-900">Active Staff & Technician Roster ({activeEmployees.length})</h2>
           <span className="text-[11px] text-slate-500">Rates auto-fill in payroll vouchers</span>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 p-4">
-          {employees.map((emp) => (
-            <div
-              key={emp.id}
-              className="p-3.5 rounded-lg border border-slate-200 bg-slate-50/50 flex flex-col justify-between"
-            >
-              <div>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-slate-900">{emp.name}</span>
-                  {userRole === 'admin' && (
-                    <button
-                      onClick={() => deleteEmployee(emp.id)}
-                      className="text-slate-400 hover:text-rose-600 cursor-pointer"
-                      title="Delete employee profile"
+        {activeEmployees.length === 0 ? (
+          <p className="px-4 py-10 text-center text-xs text-slate-400">No active staff profiles yet.</p>
+        ) : (
+          <CardCarousel>
+            {activeEmployees.map((emp) => (
+              <div
+                key={emp.id}
+                className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm transition-shadow hover:shadow-md"
+              >
+                <div className="h-12 bg-blue-700" />
+                <div className="px-3 pb-3 text-center">
+                  <div className="-mt-8 mx-auto flex h-14 w-14 items-center justify-center rounded-full border-[3px] border-white bg-blue-100 text-lg font-bold text-blue-700 shadow-sm">
+                    {emp.name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase()}
+                  </div>
+                  <div className="mt-1.5 flex items-start justify-center gap-2">
+                    <div className="min-w-0">
+                      <h3 className="truncate text-xs font-bold text-slate-900">{emp.name}</h3>
+                      <p className="mt-0.5 text-[11px] text-slate-500">{emp.position || 'Staff'}</p>
+                    </div>
+                    {userRole === 'admin' && (
+                      <button
+                        onClick={() => deleteEmployee(emp.id)}
+                        className="mt-0.5 shrink-0 text-slate-400 hover:text-rose-600 cursor-pointer"
+                        title="Delete employee profile"
+                        aria-label={`Delete ${emp.name}`}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="mt-2 flex flex-wrap justify-center gap-1">
+                    <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[9px] font-semibold text-emerald-700">
+                      Active
+                    </span>
+                    {emp.area && (
+                      <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[9px] font-semibold text-blue-700">
+                        {emp.area}
+                      </span>
+                    )}
+                  </div>
+
+                  {userRole === 'admin' && areas.length > 0 && (
+                    <select
+                      value={emp.area || ''}
+                      onChange={(e) => updateEmployee(emp.id, { area: e.target.value })}
+                      className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[10px] cursor-pointer"
+                      title="Assign tech area"
+                      aria-label={`Assign area for ${emp.name}`}
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                      <option value="">No area assigned</option>
+                      {areas.map((a) => (
+                        <option key={a.id} value={a.name}>
+                          {a.name}
+                        </option>
+                      ))}
+                    </select>
                   )}
+
+                  <div className="mt-2 border-t border-slate-100 pt-2">
+                    <p className="text-[9px] font-semibold uppercase tracking-wider text-slate-400">Daily Rate</p>
+                    <p className="mt-0.5 font-mono text-xs font-bold tabular-nums text-blue-700">
+                      {formatPHP(emp.dailyRate || 0)}
+                    </p>
+                    {emp.contact && <p className="mt-0.5 truncate text-[10px] text-slate-500">{emp.contact}</p>}
+                  </div>
                 </div>
-                <span className="inline-block mt-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-indigo-100 text-indigo-800">
-                  {emp.position}
-                </span>
-                {emp.area && (
-                  <span className="inline-block mt-1 ml-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-100 text-emerald-800">
-                    {emp.area}
-                  </span>
-                )}
-                {userRole === 'admin' && areas.length > 0 && (
-                  <select
-                    value={emp.area || ''}
-                    onChange={(e) => updateEmployee(emp.id, { area: e.target.value })}
-                    className="mt-2 w-full text-[11px] px-2 py-1 border border-slate-200 rounded bg-white cursor-pointer"
-                    title="Assign tech area"
-                  >
-                    <option value="">No area assigned</option>
-                    {areas.map((a) => (
-                      <option key={a.id} value={a.name}>
-                        {a.name}
-                      </option>
-                    ))}
-                  </select>
-                )}
-                <p className="text-xs text-slate-500 mt-2 font-mono">
-                  Daily Rate: <strong className="text-slate-800 font-bold">{formatPHP(emp.dailyRate || 0)}</strong>
-                </p>
-                {emp.contact && (
-                  <p className="text-[11px] text-slate-400 mt-0.5">📞 {emp.contact}</p>
-                )}
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </CardCarousel>
+        )}
       </div>
 
       {/* PAYROLL VOUCHERS DISBURSEMENT TABLE */}

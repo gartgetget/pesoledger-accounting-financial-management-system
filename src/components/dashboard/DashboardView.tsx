@@ -29,15 +29,33 @@ import {
   PaymentMethodDistribution,
 } from './Charts';
 
+const groupAmounts = <T,>(
+  items: T[],
+  getName: (item: T) => string,
+  getAmount: (item: T) => number
+) => {
+  const totals = new Map<string, { name: string; amount: number }>();
+  items.forEach((item) => {
+    const name = getName(item).trim() || 'Other';
+    const key = name.toLocaleLowerCase();
+    const current = totals.get(key);
+    totals.set(key, { name: current?.name || name, amount: (current?.amount || 0) + getAmount(item) });
+  });
+  return Array.from(totals.values())
+    .sort((a, b) => b.amount - a.amount);
+};
+
 export const DashboardView: React.FC<{
   onOpenRevenueModal: () => void;
   onOpenExpenseModal: () => void;
   onOpenJobModal: () => void;
-}> = ({ onOpenRevenueModal, onOpenExpenseModal, onOpenJobModal }) => {
+  onOpenAreaProfitability: () => void;
+}> = ({ onOpenRevenueModal, onOpenExpenseModal, onOpenJobModal, onOpenAreaProfitability }) => {
   const {
     revenueTransactions,
     expenses,
     paymentMethods,
+    companySettings,
     financialSummary,
     getSummaryForRange,
     getYearlyMatrix,
@@ -141,39 +159,46 @@ export const DashboardView: React.FC<{
 
   // 2d. Collections by Area panel data (range-filtered)
   const areaPanel = useMemo(() => {
-    const revByArea: Record<string, number> = {};
-    revenueTransactions
-      .filter((r) => !r.isVoid && isDateInRange(r.date, dateRange))
-      .forEach((r) => {
-        const key = r.area || 'Unassigned';
-        revByArea[key] = (revByArea[key] || 0) + (r.amount || 0);
-      });
-
-    const costByArea: Record<string, number> = {};
-    expenses
-      .filter((e) => !e.isVoid && isDateInRange(e.date, dateRange) && e.relatedModule !== 'salary')
-      .forEach((e) => {
-        const key = e.area || 'Unassigned';
-        costByArea[key] = (costByArea[key] || 0) + (e.amount || 0);
-      });
+    const periodRevenue = revenueTransactions.filter((r) => !r.isVoid && isDateInRange(r.date, dateRange));
+    const periodExpenses = expenses.filter(
+      (e) => !e.isVoid && isDateInRange(e.date, dateRange) && e.relatedModule !== 'salary'
+    );
 
     const names = Array.from(
-      new Set([...areas.map((a) => a.name), ...Object.keys(revByArea), ...Object.keys(costByArea)])
+      new Set([
+        ...areas.map((a) => a.name),
+        ...periodRevenue.map((r) => r.area || 'Unassigned'),
+        ...periodExpenses.map((e) => e.area || 'Unassigned'),
+      ])
     );
     const rows = names
-      .map((name) => ({
-        name,
-        collections: revByArea[name] || 0,
-        jobCosts: costByArea[name] || 0,
+      .map((row) => ({
+        name: row,
+        collectionCategories: groupAmounts(
+          periodRevenue.filter((revenue) => (revenue.area || 'Unassigned') === row),
+          (revenue) => revenue.serviceType || revenue.category || 'Other Collections',
+          (revenue) => revenue.amount || 0
+        ),
+        expenseCategories: groupAmounts(
+          periodExpenses.filter((expense) => (expense.area || 'Unassigned') === row),
+          (expense) => expense.category || 'Other Expenses',
+          (expense) => expense.amount || 0
+        ),
       }))
-      .sort((a, b) => b.collections - a.collections || b.jobCosts - a.jobCosts);
+      .map((row) => ({
+        ...row,
+        collections: row.collectionCategories.reduce((sum, category) => sum + category.amount, 0),
+        expenses: row.expenseCategories.reduce((sum, category) => sum + category.amount, 0),
+      }))
+      .sort((a, b) => b.collections - a.collections || b.expenses - a.expenses);
 
     return {
       rows,
       totalCollections: rows.reduce((s, r) => s + r.collections, 0),
-      totalJobCosts: rows.reduce((s, r) => s + r.jobCosts, 0),
+      totalExpenses: rows.reduce((s, r) => s + r.expenses, 0),
     };
   }, [revenueTransactions, expenses, dateRange, areas]);
+  const featuredArea = areaPanel.rows[0];
 
   // 3. Combined Recent Transactions List
   const recentTransactions = useMemo(() => {
@@ -617,93 +642,119 @@ export const DashboardView: React.FC<{
           )}
         </div>
 
-        {/* Collections and expenses by team */}
+        {/* Area profitability summary */}
         <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs lg:col-span-2">
           <div className="flex items-start justify-between gap-2 mb-4">
             <div className="flex min-w-0 flex-1 items-center gap-2">
-              <div className="w-8 h-8 shrink-0 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center">
+              <div className="w-8 h-8 shrink-0 rounded-lg bg-violet-100 text-violet-700 flex items-center justify-center">
                 <MapPin className="w-4 h-4" />
               </div>
               <div className="min-w-0">
-                <h3 className="text-sm font-bold text-slate-900">Collections & Expenses by Team</h3>
-                <p className="text-xs text-slate-500">Revenue and recorded expenses by team/area for this period</p>
+                <h3 className="text-sm font-bold text-slate-900">Area Profit & Loss Statement</h3>
+                <p className="text-xs text-slate-500">
+                  {areaPanel.rows.length > 0
+                    ? `Showing top area by collections · 1 of ${areaPanel.rows.length} areas`
+                    : 'Category totals for collections and expenses by area'}
+                </p>
               </div>
             </div>
             <button
-              onClick={() => setActiveTab('revenue')}
-              className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-xs text-emerald-600 hover:text-emerald-800 font-medium cursor-pointer"
+              onClick={onOpenAreaProfitability}
+              className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-xs text-violet-600 hover:text-violet-800 font-medium cursor-pointer"
             >
-              View all <ChevronRight className="h-3.5 w-3.5" />
+              Full statement <ChevronRight className="h-3.5 w-3.5" />
             </button>
           </div>
 
-          <div className="grid grid-cols-3 gap-2 sm:gap-3 mb-4">
-            <div className="min-w-0 bg-emerald-50 border border-emerald-100 rounded-lg p-2 sm:p-3">
-              <span className="text-[10px] font-semibold text-emerald-600 uppercase tracking-wider block">Collections</span>
-              <p className="whitespace-nowrap text-xs font-bold text-emerald-700 font-mono tabular-nums mt-0.5">
-                {formatPHP(areaPanel.totalCollections)}
-              </p>
-            </div>
-            <div className="min-w-0 bg-rose-50 border border-rose-100 rounded-lg p-2 sm:p-3">
-              <span className="text-[10px] font-semibold text-rose-600 uppercase tracking-wider block">Costs</span>
-              <p className="whitespace-nowrap text-xs font-bold text-rose-700 font-mono tabular-nums mt-0.5">
-                {formatPHP(areaPanel.totalJobCosts)}
-              </p>
-            </div>
-            <div className="min-w-0 bg-slate-100 border border-slate-200 rounded-lg p-2 sm:p-3">
-              <span className="text-[10px] font-semibold text-slate-600 uppercase tracking-wider block">Net</span>
-              <p className="whitespace-nowrap text-xs font-bold text-slate-800 font-mono tabular-nums mt-0.5">
-                {formatPHP(areaPanel.totalCollections - areaPanel.totalJobCosts)}
-              </p>
-            </div>
-          </div>
-
-          {areaPanel.rows.length === 0 ? (
+          {!featuredArea ? (
             <p className="text-xs text-slate-400 text-center py-4">
               No areas or collections in this period yet.
             </p>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full table-fixed text-left text-[10px]">
-                <thead className="text-slate-400 uppercase tracking-wider font-semibold border-b border-slate-100">
-                  <tr>
-                    <th className="w-[30%] py-2 pr-1">Team / Area</th>
-                    <th className="w-[24%] py-2 px-1 text-right">Collections</th>
-                    <th className="w-[23%] py-2 px-1 text-right">Expenses</th>
-                    <th className="w-[23%] py-2 pl-1 text-right">Net</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-50">
-                  {areaPanel.rows.map((row) => (
-                    <tr key={row.name} className="hover:bg-slate-50/70">
-                      <td className="py-2 pr-1 font-semibold text-slate-700 truncate" title={row.name}>{row.name}</td>
-                      <td className="py-2 px-1 text-right font-mono tabular-nums text-emerald-700 font-semibold whitespace-nowrap">
-                        {formatPHP(row.collections)}
-                      </td>
-                      <td className="py-2 px-1 text-right font-mono tabular-nums text-rose-600 whitespace-nowrap">
-                        {formatPHP(row.jobCosts)}
-                      </td>
-                      <td className="py-2 pl-1 text-right font-mono tabular-nums font-semibold text-slate-800 whitespace-nowrap">
-                        {formatPHP(row.collections - row.jobCosts)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  <tr className="border-t-2 border-slate-200 font-semibold">
-                    <td className="py-2 pr-1 text-slate-600 uppercase text-[10px] tracking-wider">Total</td>
-                    <td className="py-2 px-1 text-right font-mono tabular-nums text-emerald-700 whitespace-nowrap">
-                      {formatPHP(areaPanel.totalCollections)}
-                    </td>
-                    <td className="py-2 px-1 text-right font-mono tabular-nums text-rose-600 whitespace-nowrap">
-                      {formatPHP(areaPanel.totalJobCosts)}
-                    </td>
-                    <td className="py-2 pl-1 text-right font-mono tabular-nums text-slate-800 whitespace-nowrap">
-                      {formatPHP(areaPanel.totalCollections - areaPanel.totalJobCosts)}
-                    </td>
-                  </tr>
-                </tfoot>
-              </table>
+            <div className="mx-auto max-w-3xl space-y-5 rounded-lg border border-slate-200 bg-white p-4 sm:p-6">
+              <div className="border-b border-slate-200 pb-3 text-center">
+                <h4 className="text-sm font-bold uppercase tracking-tight text-slate-900">
+                  {companySettings.name}
+                </h4>
+                {(companySettings.address || companySettings.tin) && (
+                  <p className="mt-0.5 text-[10px] text-slate-500">
+                    {[companySettings.address, companySettings.tin ? `TIN: ${companySettings.tin}` : ''].filter(Boolean).join(' · ')}
+                  </p>
+                )}
+                <h5 className="mt-3 font-mono text-xs font-bold uppercase tracking-wider text-slate-800">
+                  Statement of Profit and Loss
+                </h5>
+                <p className="font-mono text-[10px] text-slate-500">
+                  For the Period: {formatDateDisplay(dateRange.startDate)} to {formatDateDisplay(dateRange.endDate)}
+                </p>
+                <p className="mt-0.5 text-[9px] text-slate-400">(All amounts stated in Philippine Peso ₱)</p>
+              </div>
+
+              <div className="space-y-5 font-mono text-[11px]">
+                <section>
+                      <div className="flex justify-between border-b border-slate-300 py-1.5 font-bold text-slate-900">
+                        <span className="uppercase">I. {featuredArea.name}</span>
+                      </div>
+
+                      <div className="space-y-3 py-2 pl-3">
+                        <div>
+                          <div className="flex justify-between gap-3 py-0.5 text-slate-700">
+                            <span>Collections by Service</span>
+                            <span className="whitespace-nowrap tabular-nums">{formatPHP(featuredArea.collections)}</span>
+                          </div>
+                          {featuredArea.collectionCategories.length > 0 && (
+                            <div className="mt-1 space-y-0.5 pl-3 text-[10px] text-slate-500">
+                              {featuredArea.collectionCategories.map((category) => (
+                                <div key={category.name} className="flex justify-between gap-3">
+                                  <span className="min-w-0 break-words">{category.name}</span>
+                                  <span className="shrink-0 whitespace-nowrap tabular-nums">{formatPHP(category.amount)}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        <div>
+                          <div className="flex justify-between gap-3 py-0.5 text-slate-700">
+                            <span>Expenses by Category</span>
+                            <span className="whitespace-nowrap tabular-nums text-rose-700">{formatPHP(featuredArea.expenses)}</span>
+                          </div>
+                          {featuredArea.expenseCategories.length > 0 && (
+                            <div className="mt-1 space-y-0.5 pl-3 text-[10px] text-slate-500">
+                              {featuredArea.expenseCategories.map((category) => (
+                                <div key={category.name} className="flex justify-between gap-3">
+                                  <span className="min-w-0 break-words">{category.name}</span>
+                                  <span className="shrink-0 whitespace-nowrap tabular-nums text-rose-600">{formatPHP(category.amount)}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex justify-between border-t border-slate-200 bg-slate-50 px-2 py-1.5 font-bold text-slate-900">
+                        <span>NET — {featuredArea.name}</span>
+                        <span className={`whitespace-nowrap tabular-nums ${featuredArea.collections - featuredArea.expenses >= 0 ? 'text-emerald-800' : 'text-rose-700'}`}>
+                          {formatPHP(featuredArea.collections - featuredArea.expenses)}
+                        </span>
+                      </div>
+                      <div className="mt-2 flex items-center justify-between rounded bg-slate-900 px-3 py-2 text-white">
+                        <div>
+                          <span className="block font-sans text-[10px] font-bold uppercase tracking-wide">Net Income / Profit</span>
+                          <span className="font-sans text-[9px] text-slate-400">
+                            Net Profit Margin: {featuredArea.collections > 0
+                              ? (((featuredArea.collections - featuredArea.expenses) / featuredArea.collections) * 100).toFixed(1)
+                              : '0'}%
+                          </span>
+                        </div>
+                        <span className={`text-sm font-bold tabular-nums ${
+                          featuredArea.collections - featuredArea.expenses >= 0 ? 'text-emerald-400' : 'text-rose-400'
+                        }`}>
+                          {formatPHP(featuredArea.collections - featuredArea.expenses)}
+                        </span>
+                      </div>
+                </section>
+              </div>
             </div>
           )}
         </div>

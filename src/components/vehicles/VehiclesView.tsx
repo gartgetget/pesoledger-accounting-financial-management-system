@@ -11,6 +11,7 @@ import { useAccounting } from '../../context/AccountingContext';
 import { formatPHP, parseNumber } from '../../utils/currency';
 import { getTodayDateString, formatDateDisplay } from '../../utils/date';
 import { exportToExcel } from '../../utils/excel';
+import { CardCarousel } from '../layout/CardCarousel';
 
 export const VehiclesView: React.FC = () => {
   const {
@@ -177,54 +178,78 @@ export const VehiclesView: React.FC = () => {
       </div>
 
       {/* FLEET CARDS */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        {vehicles.map((v) => {
+      {vehicles.length === 0 ? (
+        <div className="rounded-xl border border-slate-200 bg-white px-4 py-10 text-center text-xs text-slate-400">
+          No vehicles added yet.
+        </div>
+      ) : (
+        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xs">
+          <div className="border-b border-slate-100 px-4 py-3">
+            <h2 className="text-xs font-bold text-slate-900">Vehicle Fleet ({vehicles.length})</h2>
+          </div>
+          <CardCarousel>
+            {vehicles.map((v) => {
           const vehExps = vehicleExpenses.filter((e) => e.vehicleId === v.id);
           const totalSpent = vehExps.reduce((s, e) => s + e.amount, 0);
+          const vehicleStatus = v.status || 'Active';
 
           return (
             <div
               key={v.id}
-              className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs flex flex-col justify-between"
+              className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm transition-shadow hover:shadow-md"
             >
-              <div>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="w-7 h-7 rounded-md bg-slate-100 text-slate-700 flex items-center justify-center">
-                      <Car className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <h2 className="text-xs font-bold text-slate-900">{v.vehicleName}</h2>
-                      <span className="text-[10px] font-mono text-slate-500">{v.plateNumber}</span>
-                    </div>
+              <div className="h-12 bg-blue-700" />
+              <div className="px-3 pb-3 text-center">
+                <div className="-mt-8 mx-auto flex h-14 w-14 items-center justify-center rounded-full border-[3px] border-white bg-blue-100 text-blue-700 shadow-sm">
+                  <Car className="h-6 w-6" />
+                </div>
+                <div className="mt-1.5 flex items-start justify-center gap-2">
+                  <div className="min-w-0">
+                    <h2 className="truncate text-xs font-bold text-slate-900">{v.vehicleName}</h2>
+                    <p className="mt-0.5 text-[11px] text-slate-500">{v.model || 'Vehicle'}</p>
                   </div>
                   {userRole === 'admin' && (
                     <button
                       onClick={() => deleteVehicle(v.id)}
-                      className="text-slate-400 hover:text-rose-600 cursor-pointer"
+                      className="mt-0.5 shrink-0 text-slate-400 hover:text-rose-600 cursor-pointer"
                       title="Remove vehicle"
+                      aria-label={`Remove ${v.vehicleName}`}
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   )}
                 </div>
 
-                <div className="mt-3 pt-3 border-t border-slate-100 text-xs text-slate-600 space-y-1">
-                  <p>Model: <strong>{v.model || 'Commercial Van'}</strong></p>
-                  <p>Assigned Driver: <strong>{v.assignedDriver}</strong></p>
+                <div className="mt-2 flex flex-wrap justify-center gap-1">
+                  <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[9px] font-mono font-semibold text-blue-700">
+                    {v.plateNumber}
+                  </span>
+                  <span className={`rounded-full px-2 py-0.5 text-[9px] font-semibold ${
+                    vehicleStatus === 'Active'
+                      ? 'bg-emerald-50 text-emerald-700'
+                      : vehicleStatus === 'Under Maintenance'
+                        ? 'bg-amber-50 text-amber-700'
+                        : 'bg-slate-100 text-slate-600'
+                  }`}>
+                    {vehicleStatus}
+                  </span>
                 </div>
-              </div>
 
-              <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
-                <span className="text-[10px] uppercase font-bold text-slate-400">Total Spent</span>
-                <span className="text-xs font-mono font-bold text-orange-700 tabular-nums">
-                  {formatPHP(totalSpent)}
-                </span>
+                <div className="mt-2 border-t border-slate-100 pt-2">
+                  <p className="text-[9px] font-semibold uppercase tracking-wider text-slate-400">Assigned Driver</p>
+                  <p className="mt-0.5 truncate text-[11px] font-semibold text-slate-700">{v.assignedDriver || 'Unassigned'}</p>
+                  <p className="mt-2 text-[9px] font-semibold uppercase tracking-wider text-slate-400">Total Spent</p>
+                  <p className="mt-0.5 font-mono text-xs font-bold tabular-nums text-blue-700">
+                    {formatPHP(totalSpent)}
+                  </p>
+                </div>
               </div>
             </div>
           );
-        })}
-      </div>
+            })}
+          </CardCarousel>
+        </div>
+      )}
 
       {/* SUMMARY BANNER */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

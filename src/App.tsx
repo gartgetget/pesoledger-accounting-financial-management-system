@@ -25,9 +25,10 @@ import { AuthSuccessView } from './components/auth/AuthSuccessView';
 import { RevenueTransaction, Expense, ServiceJob } from './types';
 
 const MainAppContent: React.FC = () => {
-  const { activeTab } = useAccounting();
+  const { activeTab, setActiveTab } = useAccounting();
   const { isLoading, isAuthenticated: authIsAuthenticated } = useAuth();
 
+  const [reportsInitialTab, setReportsInitialTab] = useState<'pnl' | 'areas'>('pnl');
   const [isRevenueModalOpen, setIsRevenueModalOpen] = useState(false);
   const [editingRevenue, setEditingRevenue] = useState<RevenueTransaction | null>(null);
 
@@ -91,6 +92,12 @@ const MainAppContent: React.FC = () => {
     setIsJobModalOpen(true);
   };
 
+  const handleOpenAreaProfitability = () => {
+    setReportsInitialTab('areas');
+    setActiveTab('reports');
+  };
+  const handleReportsInitialTabConsumed = useCallback(() => setReportsInitialTab('pnl'), []);
+
   return (
     <div className="flex h-screen bg-slate-50 text-slate-800 font-sans antialiased overflow-hidden">
       {/* 1. SIDEBAR NAVIGATION (off-canvas drawer below lg) */}
@@ -122,6 +129,7 @@ const MainAppContent: React.FC = () => {
                 onOpenRevenueModal={handleOpenRevenueModal}
                 onOpenExpenseModal={handleOpenExpenseModal}
                 onOpenJobModal={handleOpenJobModal}
+                onOpenAreaProfitability={handleOpenAreaProfitability}
               />
             )}
 
@@ -163,7 +171,12 @@ const MainAppContent: React.FC = () => {
 
             {activeTab === 'yearly' && <YearlyAccountingView />}
 
-            {activeTab === 'reports' && <ReportsView />}
+            {activeTab === 'reports' && (
+              <ReportsView
+                initialTab={reportsInitialTab}
+                onInitialTabConsumed={handleReportsInitialTabConsumed}
+              />
+            )}
 
             {activeTab === 'migration' && <MigrationView />}
 

@@ -20,7 +20,25 @@ const ROMAN = [
   'XI', 'XII', 'XIII', 'XIV', 'XV', 'XVI', 'XVII', 'XVIII', 'XIX', 'XX',
 ];
 
-export const ReportsView: React.FC = () => {
+const groupAmounts = <T,>(
+  items: T[],
+  getName: (item: T) => string,
+  getAmount: (item: T) => number
+) => {
+  const totals = new Map<string, { name: string; amount: number }>();
+  items.forEach((item) => {
+    const name = getName(item).trim() || 'Other';
+    const key = name.toLocaleLowerCase();
+    const current = totals.get(key);
+    totals.set(key, { name: current?.name || name, amount: (current?.amount || 0) + getAmount(item) });
+  });
+  return Array.from(totals.values()).sort((a, b) => b.amount - a.amount);
+};
+
+export const ReportsView: React.FC<{
+  initialTab?: 'pnl' | 'areas';
+  onInitialTabConsumed?: () => void;
+}> = ({ initialTab = 'pnl', onInitialTabConsumed }) => {
   const {
     financialSummary,
     dateRange,
@@ -31,57 +49,47 @@ export const ReportsView: React.FC = () => {
     areas,
   } = useAccounting();
 
-  const [activeReportTab, setActiveReportTab] = useState<'pnl' | 'categories' | 'payment_methods' | 'areas'>('pnl');
+  const [activeReportTab, setActiveReportTab] = useState<'pnl' | 'categories' | 'payment_methods' | 'areas'>(initialTab);
+
+  React.useEffect(() => {
+    onInitialTabConsumed?.();
+  }, [onInitialTabConsumed]);
 
   // Area Profitability Matrix (same shared formula as dashboard / daily)
   const areaReport = useMemo(() => {
-    const revByArea: Record<string, number> = {};
-    revenueTransactions
-      .filter((r) => !r.isVoid && isDateInRange(r.date, dateRange))
-      .forEach((r) => {
-        const key = r.area || 'Unassigned';
-        revByArea[key] = (revByArea[key] || 0) + (r.amount || 0);
-      });
-
-    const costByArea: Record<string, number> = {};
-    expenses
-      .filter((e) => !e.isVoid && isDateInRange(e.date, dateRange) && e.relatedModule !== 'salary')
-      .forEach((e) => {
-        const key = e.area || 'Unassigned';
-        costByArea[key] = (costByArea[key] || 0) + (e.amount || 0);
-      });
+    const periodRevenue = revenueTransactions.filter((r) => !r.isVoid && isDateInRange(r.date, dateRange));
+    const periodExpenses = expenses.filter(
+      (e) => !e.isVoid && isDateInRange(e.date, dateRange) && e.relatedModule !== 'salary'
+    );
 
     const names = Array.from(
-      new Set([...areas.map((a) => a.name), ...Object.keys(revByArea), ...Object.keys(costByArea)])
+      new Set([
+        ...areas.map((a) => a.name),
+        ...periodRevenue.map((r) => r.area || 'Unassigned'),
+        ...periodExpenses.map((e) => e.area || 'Unassigned'),
+      ])
     );
     const rows = names
       .map((name) => {
-        const revenueList = revenueTransactions
-          .filter((r) => !r.isVoid && isDateInRange(r.date, dateRange) && (r.area || 'Unassigned') === name)
-          .sort((a, b) => a.date.localeCompare(b.date));
-        const expenseList = expenses
-          .filter(
-            (e) =>
-              !e.isVoid &&
-              isDateInRange(e.date, dateRange) &&
-              e.relatedModule !== 'salary' &&
-              (e.area || 'Unassigned') === name
-          )
-          .sort((a, b) => a.date.localeCompare(b.date));
-
-        const costList = expenseList.map((e) => ({
-            key: `exp-${e.id}`,
-            date: e.date,
-            label: `${e.date} · ${e.category} · ${e.description}${e.vendorSupplier ? ` · ${e.vendorSupplier}` : ''}`,
-            amount: e.amount || 0,
-          })).sort((a, b) => a.date.localeCompare(b.date));
+        const revenueList = periodRevenue.filter((revenue) => (revenue.area || 'Unassigned') === name);
+        const expenseList = periodExpenses.filter((expense) => (expense.area || 'Unassigned') === name);
+        const collectionCategories = groupAmounts(
+          revenueList,
+          (revenue) => revenue.serviceType || revenue.category || 'Other Collections',
+          (revenue) => revenue.amount || 0
+        );
+        const expenseCategories = groupAmounts(
+          expenseList,
+          (expense) => expense.category || 'Other Expenses',
+          (expense) => expense.amount || 0
+        );
 
         return {
           name,
-          collections: revenueList.reduce((s, r) => s + (r.amount || 0), 0),
-          costs: costList.reduce((s, c) => s + c.amount, 0),
-          revenueList,
-          costList,
+          collections: collectionCategories.reduce((sum, category) => sum + category.amount, 0),
+          costs: expenseCategories.reduce((sum, category) => sum + category.amount, 0),
+          collectionCategories,
+          expenseCategories,
         };
       })
       .sort((a, b) => b.collections - a.collections || b.costs - a.costs);
@@ -501,20 +509,17 @@ export const ReportsView: React.FC = () => {
                         <div className="divide-y divide-slate-100 pl-4 py-1">
                           <div className="py-1">
                             <div className="flex justify-between py-0.5 text-slate-700">
-                              <span>Collections (Revenue)</span>
+                              <span>Collections by Service</span>
                               <span className="tabular-nums">{formatPHP(row.collections)}</span>
                             </div>
                             <div className="pl-4 mt-1 space-y-0.5 text-[11px] text-slate-500">
-                              {row.revenueList.length === 0 ? (
-                                <p className="text-slate-400">No revenue entries in this period.</p>
+                              {row.collectionCategories.length === 0 ? (
+                                <p className="text-slate-400">No collections in this period.</p>
                               ) : (
-                                row.revenueList.map((r) => (
-                                  <div key={r.id} className="flex justify-between gap-4">
-                                    <span>
-                                      {r.date} · {r.invoiceNumber} · {r.description || r.category}
-                                      {r.customerName ? ` — ${r.customerName}` : ''}
-                                    </span>
-                                    <span className="tabular-nums whitespace-nowrap">{formatPHP(r.amount)}</span>
+                                row.collectionCategories.map((category) => (
+                                  <div key={category.name} className="flex justify-between gap-4">
+                                    <span>{category.name}</span>
+                                    <span className="tabular-nums whitespace-nowrap">{formatPHP(category.amount)}</span>
                                   </div>
                                 ))
                               )}
@@ -523,18 +528,18 @@ export const ReportsView: React.FC = () => {
 
                           <div className="py-1">
                             <div className="flex justify-between py-0.5 text-slate-700">
-                              <span>Costs — Jobs + Tagged Expenses</span>
+                              <span>Expenses by Category</span>
                               <span className="tabular-nums text-rose-700">{formatPHP(row.costs)}</span>
                             </div>
                             <div className="pl-4 mt-1 space-y-0.5 text-[11px] text-slate-500">
-                              {row.costList.length === 0 ? (
-                                <p className="text-slate-400">No job or tagged expense costs in this period.</p>
+                              {row.expenseCategories.length === 0 ? (
+                                <p className="text-slate-400">No tagged expenses in this period.</p>
                               ) : (
-                                row.costList.map((c) => (
-                                  <div key={c.key} className="flex justify-between gap-4">
-                                    <span>{c.label}</span>
+                                row.expenseCategories.map((category) => (
+                                  <div key={category.name} className="flex justify-between gap-4">
+                                    <span>{category.name}</span>
                                     <span className="tabular-nums whitespace-nowrap text-rose-600">
-                                      {formatPHP(c.amount)}
+                                      {formatPHP(category.amount)}
                                     </span>
                                   </div>
                                 ))
