@@ -24,6 +24,13 @@ export const JobInvoiceModal: React.FC<JobInvoiceModalProps> = ({ job, onClose }
     const found = paymentMethods.find((p) => p.id === pmId);
     return found ? found.name : pmId || 'Not specified';
   };
+  const getExpenseKind = (category: string) => {
+    const normalized = category.toUpperCase().replace(/[^A-Z]/g, '');
+    if (normalized.includes('INSTALLATIONMATERIALS')) return 'installationMaterials';
+    if (normalized.includes('PARTS') || normalized.includes('MATERIALS')) return 'parts';
+    if (normalized.includes('REFERRAL') || normalized.includes('REFERAL')) return 'referral';
+    return null;
+  };
   const invoiceCustomers = job.customers || [];
   const jobTotals = getJobCollectionTotals(job, expenses);
   const collectedCustomers = invoiceCustomers.filter(
@@ -55,17 +62,22 @@ export const JobInvoiceModal: React.FC<JobInvoiceModalProps> = ({ job, onClose }
       customerName: customer.name,
       amount: customer.referralAmount,
     }));
+  const customerInstallationMaterialsLines = invoiceCustomers
+    .filter((customer) => customer.installationMaterialsPrice > 0)
+    .map((customer, index) => ({
+      key: `installation-materials-${index}`,
+      label: customer.installationMaterials || 'Installation Materials',
+      customerName: customer.name,
+      amount: customer.installationMaterialsPrice,
+    }));
   const linkedJobExpenses = expenses.filter(
     (expense) =>
       expense.relatedId === job.id &&
       !expense.isVoid &&
-      (expense.category.toUpperCase().replace(/[^A-Z]/g, '').includes('PARTS') ||
-        expense.category.toUpperCase().replace(/[^A-Z]/g, '').includes('MATERIALS') ||
-        expense.category.toUpperCase().replace(/[^A-Z]/g, '').includes('REFERRAL') ||
-        expense.category.toUpperCase().replace(/[^A-Z]/g, '').includes('REFERAL'))
+      getExpenseKind(expense.category) !== null
   );
   const ledgerPartsLines = linkedJobExpenses
-    .filter((expense) => expense.category.toUpperCase().includes('PARTS') || expense.category.toUpperCase().includes('MATERIALS'))
+    .filter((expense) => getExpenseKind(expense.category) === 'parts')
     .map((expense) => ({
       key: expense.id,
       label: `${expense.description || expense.category} · Paid via ${getMethodName(expense.paymentMethodId)}`,
@@ -73,14 +85,23 @@ export const JobInvoiceModal: React.FC<JobInvoiceModalProps> = ({ job, onClose }
       amount: expense.amount,
     }));
   const ledgerReferralLines = linkedJobExpenses
-    .filter((expense) => expense.category.toUpperCase().includes('REFERRAL'))
+    .filter((expense) => getExpenseKind(expense.category) === 'referral')
     .map((expense) => ({
       key: expense.id,
       label: expense.description || expense.category,
       customerName: '',
       amount: expense.amount,
     }));
+  const ledgerInstallationMaterialsLines = linkedJobExpenses
+    .filter((expense) => getExpenseKind(expense.category) === 'installationMaterials')
+    .map((expense) => ({
+      key: expense.id,
+      label: `${expense.description || expense.category} · Paid via ${getMethodName(expense.paymentMethodId)}`,
+      customerName: '',
+      amount: expense.amount,
+    }));
   const partsExpense = jobTotals.partsExpense;
+  const installationMaterialsExpense = jobTotals.installationMaterialsExpense;
   const referralExpense = jobTotals.referralExpense;
   const getCompleteExpenseLines = (
     customerLines: typeof customerPartsLines,
@@ -117,10 +138,16 @@ export const JobInvoiceModal: React.FC<JobInvoiceModalProps> = ({ job, onClose }
     referralExpense,
     'Referral',
   );
+  const installationMaterialsExpenseLines = getCompleteExpenseLines(
+    customerInstallationMaterialsLines,
+    ledgerInstallationMaterialsLines,
+    installationMaterialsExpense,
+    'Installation Materials',
+  );
   const grossCollection = jobTotals.grossCollection;
   const invoiceCollection = jobTotals.netCollection;
   const customerGrossCollection = invoiceCustomers.reduce(
-    (sum, customer) => sum + customer.amountCollected + customer.installationMaterialsPrice,
+    (sum, customer) => sum + customer.amountCollected,
     0,
   );
   const additionalCollection = Math.max(0, grossCollection - customerGrossCollection);
@@ -128,7 +155,12 @@ export const JobInvoiceModal: React.FC<JobInvoiceModalProps> = ({ job, onClose }
     ? job.total
     : Math.max(0, job.subtotal - job.discountAmount);
   const netAfterJobExpenses = invoiceCollection;
-  const jobExpenseLines = [...partsExpenseLines, ...referralExpenseLines];
+  const jobExpenseLines = [
+    ...partsExpenseLines,
+    ...installationMaterialsExpenseLines,
+    ...referralExpenseLines,
+  ];
+  const totalJobExpenses = partsExpense + installationMaterialsExpense + referralExpense;
 
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 overflow-y-auto">
@@ -300,7 +332,7 @@ export const JobInvoiceModal: React.FC<JobInvoiceModalProps> = ({ job, onClose }
                     <span className="min-w-0 truncate">
                       {customer.name || 'Customer'} ({getMethodName(customer.paymentMethodId)}):
                     </span>
-                    <span className="shrink-0">{formatPHP(customer.amountCollected + customer.installationMaterialsPrice)}</span>
+                    <span className="shrink-0">{formatPHP(customer.amountCollected)}</span>
                   </div>
                 ))
               ) : null}
@@ -309,14 +341,14 @@ export const JobInvoiceModal: React.FC<JobInvoiceModalProps> = ({ job, onClose }
                 <span>{formatPHP(invoiceCollection)}</span>
               </div>
               <div className="flex justify-between py-1 text-slate-800 font-semibold">
-                <span>PARTS / MATERIALS + REFERRAL EXPENSES:</span>
-                <span className={partsExpense + referralExpense > 0 ? 'text-rose-600' : 'text-slate-700'}>
-                  {formatPHP(partsExpense + referralExpense)}
+                <span>INSTALLATION MATERIALS + PARTS / MATERIALS + REFERRAL EXPENSES:</span>
+                <span className={totalJobExpenses > 0 ? 'text-rose-600' : 'text-slate-700'}>
+                  {formatPHP(totalJobExpenses)}
                 </span>
               </div>
             </div>
           </div>
-          {(invoiceCollection > 0 || partsExpense > 0 || referralExpense > 0) && (
+          {(invoiceCollection > 0 || totalJobExpenses > 0) && (
             <div className="flex justify-end text-xs">
               <div className="w-64 space-y-1 font-mono border-t border-slate-200 pt-2 text-amber-700">
                 <span className="block text-[10px] font-sans font-bold uppercase tracking-wide text-slate-500">
@@ -332,7 +364,7 @@ export const JobInvoiceModal: React.FC<JobInvoiceModalProps> = ({ job, onClose }
                 ))}
                 <div className="flex justify-between border-t border-amber-200 pt-1">
                   <span>Total Job Expenses:</span>
-                  <span>-{formatPHP(partsExpense + referralExpense)}</span>
+                  <span>-{formatPHP(totalJobExpenses)}</span>
                 </div>
                 <div className="flex justify-between border-t border-slate-300 pt-1 font-bold text-slate-900">
                   <span>NET AFTER JOB EXPENSES:</span>

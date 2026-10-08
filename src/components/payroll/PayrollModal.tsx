@@ -12,10 +12,11 @@ interface PayrollModalProps {
 }
 
 export const PayrollModal: React.FC<PayrollModalProps> = ({ isOpen, onClose, editRecord }) => {
-  const { employees, paymentMethods, processPayroll, updatePayroll } = useAccounting();
+  const { employees, paymentMethods, areas, processPayroll, updatePayroll } = useAccounting();
 
   const [date, setDate] = useState(getTodayDateString());
   const [employeeId, setEmployeeId] = useState(employees[0]?.id || '');
+  const [area, setArea] = useState(employees[0]?.area || '');
   const [period, setPeriod] = useState('Semi-monthly (Sep 1-15, 2026)');
 
   const [daysWorked, setDaysWorked] = useState('6');
@@ -38,6 +39,11 @@ export const PayrollModal: React.FC<PayrollModalProps> = ({ isOpen, onClose, edi
     }
   }, [employeeId, employees, editRecord]);
 
+  useEffect(() => {
+    if (editRecord) return;
+    setArea(employees.find((e) => e.id === employeeId)?.area || '');
+  }, [employeeId, employees, editRecord]);
+
   // Seed form when editing an existing voucher
   useEffect(() => {
     if (!editRecord) return;
@@ -50,6 +56,7 @@ export const PayrollModal: React.FC<PayrollModalProps> = ({ isOpen, onClose, edi
       : Math.round(((editRecord.foodAllowance || 0) / days) * 100) / 100;
     setDate(editRecord.date || getTodayDateString());
     setEmployeeId(editRecord.employeeId || '');
+    setArea(editRecord.area || '');
     setPeriod(editRecord.period || '');
     setDaysWorked(String(days));
     setBaseRate(String(seedRate));
@@ -93,6 +100,7 @@ export const PayrollModal: React.FC<PayrollModalProps> = ({ isOpen, onClose, edi
     const payload = {
       employeeId: emp.id,
       employeeName: emp.name,
+      area,
       date,
       period,
       daysWorked: parsedDays,
@@ -191,6 +199,25 @@ export const PayrollModal: React.FC<PayrollModalProps> = ({ isOpen, onClose, edi
                   {emp.name} — {emp.position} (Daily Rate: ₱{emp.dailyRate || 0})
                 </option>
               ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">
+              Area
+            </label>
+            <select
+              value={area}
+              onChange={(e) => setArea(e.target.value)}
+              className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg bg-white"
+            >
+              <option value="">No area</option>
+              {areas.map((item) => (
+                <option key={item.id} value={item.name}>{item.name}</option>
+              ))}
+              {area && !areas.some((item) => item.name === area) && (
+                <option value={area}>{area}</option>
+              )}
             </select>
           </div>
 

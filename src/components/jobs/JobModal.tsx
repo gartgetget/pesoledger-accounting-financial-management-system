@@ -24,7 +24,7 @@ const nextJobNumber = (jobs: ServiceJob[]): string => {
 
 const getCustomerTotalCollection = (customer: JobCustomer): number => {
   const partsTotal = customer.parts.reduce((sum, part) => sum + (Number(part.price) || 0), 0);
-  return (Number(customer.amountCollected) || 0) +
+  return (Number(customer.amountCollected) || 0) -
     (Number(customer.installationMaterialsPrice) || 0) -
     partsTotal -
     (Number(customer.referralAmount) || 0);
@@ -191,8 +191,8 @@ export const JobModal: React.FC<JobModalProps> = ({
   const installationMaterialsTotal = cleanCustomerRows.reduce((sum, customer) => sum + customer.installationMaterialsPrice, 0);
   const referralTotal = cleanCustomerRows.reduce((sum, customer) => sum + customer.referralAmount, 0);
   const collectionAmount = cleanCustomerRows.reduce((sum, customer) => sum + (Number(customer.amountCollected) || 0), 0);
-  const grossCollection = collectionAmount + installationMaterialsTotal;
-  const totalDeductions = partsTotal + referralTotal;
+  const grossCollection = collectionAmount;
+  const totalDeductions = partsTotal + installationMaterialsTotal + referralTotal;
   const totalCollected = grossCollection - totalDeductions;
   const subtotal = grossCollection;
 
@@ -206,7 +206,7 @@ export const JobModal: React.FC<JobModalProps> = ({
 
   computedDiscount = Math.min(subtotal, computedDiscount);
   const finalTotal = Math.max(0, subtotal - computedDiscount);
-  const actualPaid = grossCollection;
+  const actualPaid = collectionAmount;
   const paymentStatus: PaymentStatus =
     actualPaid >= finalTotal ? 'Paid' : actualPaid > 0 ? 'Partially Paid' : 'Unpaid';
 
@@ -604,7 +604,7 @@ export const JobModal: React.FC<JobModalProps> = ({
               <strong className="text-slate-800 text-sm">{formatPHP(finalTotal)}</strong>
               {totalDeductions > 0 && (
                 <div className="text-amber-600">
-                  Parts/materials and referral expenses: {formatPHP(totalDeductions)}
+                  Installation materials, parts/materials, and referral expenses: {formatPHP(totalDeductions)}
                 </div>
               )}
               <div className="text-[10px] text-slate-600">

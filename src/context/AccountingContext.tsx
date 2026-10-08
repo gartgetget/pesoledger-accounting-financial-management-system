@@ -46,7 +46,7 @@ const emptyCompanySettings: CompanySettings = {
 const defaultExpenseCategories: CategoryItem[] = [
   'GAS','SALARY','DAILY EXPENSES & SAVINGS','SASAKYAN','SHOP RENT',
   'FOOD ALLOWANCE','INCENTIVES','PERFECT ATTENDANCE','OT PAY','MOTOR','OTHER DEDUCTIONS','OTHER EXPENSES',
-  'PARTS / MATERIALS','REFERRAL',
+  'PARTS / MATERIALS','INSTALLATION MATERIALS','REFERRAL',
 ].map((name, index) => ({ id: `cat-exp-default-${index + 1}`, name, isDefault: true }));
 
 export interface FinancialSummary {
@@ -225,7 +225,7 @@ function mapBackendJob(order: any): ServiceJob {
     }
   }
   const customerBill = mappedCustomers.reduce(
-    (sum, customer) => sum + customer.amountCollected + customer.installationMaterialsPrice,
+    (sum, customer) => sum + customer.amountCollected,
     0,
   );
   const calculatedSubtotal = mappedCustomers.length > 0
@@ -262,6 +262,7 @@ function mapBackendJob(order: any): ServiceJob {
     status: (order.status as ServiceJob['status']) || 'open',
     notes: order.notes || '', revenueId: order.revenueId || undefined, expenseId: order.expenseId || undefined,
     jobPartsExpense: Number(order.jobPartsExpense) || 0,
+    jobInstallationMaterialsExpense: Number(order.jobInstallationMaterialsExpense) || 0,
     jobReferralExpense: Number(order.jobReferralExpense) || 0,
     area: order.area || '',
     customers: mappedCustomers,
@@ -293,6 +294,7 @@ function mapBackendPayroll(entry: any): PayrollRecord {
     id: entry._id || entry.id,
     date: entry.date ? String(entry.date).split('T')[0] : '',
     employeeId: entry.employeeId || '',
+    area: entry.area || '',
     daysWorked: Number(entry.daysWorked || 0),
     dailyRate: Number(entry.dailyRate || 0),
     foodRate: Number(entry.foodRate || 0),
@@ -434,6 +436,7 @@ export const AccountingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       let after: string | undefined;
       let synced = 0;
       let referralTotal = 0;
+      let installationMaterialsTotal = 0;
       let partsMaterialsTotal = 0;
       try {
         do {
@@ -441,12 +444,14 @@ export const AccountingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
             synced: number;
             nextCursor: string | null;
             referralTotal: number;
+            installationMaterialsTotal: number;
             partsMaterialsTotal: number;
           }>(
             `/api/${activeWorkspaceId}/job-orders/sync-ledger${after ? `?after=${encodeURIComponent(after)}` : ''}`,
           );
           synced += result.synced;
           referralTotal += result.referralTotal || 0;
+          installationMaterialsTotal += result.installationMaterialsTotal || 0;
           partsMaterialsTotal += result.partsMaterialsTotal || 0;
           after = result.nextCursor || undefined;
         } while (after);
@@ -472,6 +477,13 @@ export const AccountingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
           const legacyParts = Array.isArray(job.parts)
             ? job.parts.reduce((sum: number, part: any) => sum + (Number(part.price) || 0), 0)
             : 0;
+          const customerInstallationMaterials = customers.reduce(
+            (sum: number, customer: any) => sum + (Number(customer.installationMaterialsPrice) || 0),
+            0,
+          );
+          const legacyInstallationMaterials = Number(
+            job.installationMaterialsPrice ?? job.installationPrice,
+          ) || 0;
           const customerReferral = customers.reduce(
             (sum: number, customer: any) => sum + (Number(customer.referralAmount) || 0),
             0,
@@ -480,6 +492,7 @@ export const AccountingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
             customerReferral,
             Number(job.referralAmount ?? job.referralCost) || 0,
           );
+          installationMaterialsTotal += customerInstallationMaterials || legacyInstallationMaterials;
           partsMaterialsTotal += customerParts || legacyParts;
           referralTotal += referral;
 
@@ -509,7 +522,7 @@ export const AccountingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         isDefault: false,
       })));
       toast.success(
-        `Synced ${synced} job order${synced === 1 ? '' : 's'} — Referral: ₱${referralTotal.toLocaleString()}, Parts / Materials: ₱${partsMaterialsTotal.toLocaleString()}`,
+        `Synced ${synced} job order${synced === 1 ? '' : 's'} — Referral: ₱${referralTotal.toLocaleString()}, Installation Materials: ₱${installationMaterialsTotal.toLocaleString()}, Parts / Materials: ₱${partsMaterialsTotal.toLocaleString()}`,
       );
       return synced;
     } catch (error) {
@@ -709,8 +722,7 @@ export const AccountingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         totalAmount: jobData.total,
         total: jobData.total,
         amountPaid: jobData.customers?.reduce(
-          (sum, customer) =>
-            sum + (Number(customer.amountCollected) || 0) + (Number(customer.installationMaterialsPrice) || 0),
+          (sum, customer) => sum + (Number(customer.amountCollected) || 0),
           0,
         ) || 0,
         paymentMethodId: jobData.customers?.find((customer) => customer.amountCollected > 0)?.paymentMethodId || '',
@@ -796,6 +808,7 @@ export const AccountingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       await api.post(`/api/${activeWorkspaceId}/payroll`, {
         employeeId: record.employeeId,
         employeeName: record.employeeName,
+        area: record.area || '',
         date: record.date,
         period: record.period,
         daysWorked: record.daysWorked,
@@ -826,6 +839,7 @@ export const AccountingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       await api.put(`/api/${activeWorkspaceId}/payroll/${id}`, {
         employeeId: record.employeeId,
         employeeName: record.employeeName,
+        area: record.area || '',
         date: record.date,
         period: record.period,
         daysWorked: record.daysWorked,

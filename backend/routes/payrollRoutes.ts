@@ -32,6 +32,7 @@ const syncPayrollExpense = async (workspaceId: string, entry: PayrollEntryDoc, c
     description: `Payroll — ${entry.employeeName} (${entry.period})`,
     amount,
     paymentMethod: entry.paymentMethodId || "Cash",
+    area: entry.area || "",
     relatedModule: "salary",
     relatedId: entry._id.toString(),
   };
@@ -77,6 +78,7 @@ router.post("/:workspaceId/payroll", ensureWorkspaceAccess, async (req, res) => 
       workspaceId,
       employeeId: b.employeeId || "",
       employeeName,
+      area: String(b.area || "").trim(),
       date: b.date ? new Date(b.date) : new Date(),
       period,
       daysWorked: Number(b.daysWorked || 0),
@@ -127,7 +129,7 @@ router.put("/:workspaceId/payroll/:id", ensureWorkspaceAccess, async (req, res) 
   const b = req.body || {};
   const allowed: Record<string, unknown> = {};
   const keys = [
-    "employeeId", "employeeName", "date", "period", "daysWorked", "dailyRate", "foodRate",
+    "employeeId", "employeeName", "area", "date", "period", "daysWorked", "dailyRate", "foodRate",
     "basicSalary", "overtimePay", "incentives", "coop", "foodAllowance", "deductions", "paymentMethodId", "notes",
   ];
   for (const k of keys) {
@@ -141,6 +143,7 @@ router.put("/:workspaceId/payroll/:id", ensureWorkspaceAccess, async (req, res) 
   if (b.netSalary !== undefined) allowed.netSalary = Number(b.netSalary);
   if (b.netPay !== undefined) allowed.netPay = Number(b.netPay);
   if (b.date) allowed.date = new Date(b.date);
+  if (allowed.area !== undefined) allowed.area = String(allowed.area || "").trim();
 
   Object.assign(entry, allowed);
   if (b.grossSalary !== undefined || b.grossPay !== undefined) entry.grossPay = entry.grossSalary || entry.grossPay;

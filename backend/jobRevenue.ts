@@ -1,6 +1,5 @@
 interface JobRevenueCustomer {
   amountCollected?: number;
-  installationMaterialsPrice?: number;
   paymentMethodId?: string;
   serviceCategory?: string;
 }
@@ -8,6 +7,8 @@ interface JobRevenueCustomer {
 interface JobRevenueSource {
   customers?: JobRevenueCustomer[];
   amountPaid?: number;
+  installationMaterialsPrice?: number;
+  installationPrice?: number;
   serviceCategory?: string;
   paymentMethodId?: string;
   jobNumber: string;
@@ -33,7 +34,11 @@ export const getJobRevenueLines = (job: JobRevenueSource): JobRevenueLine[] => {
   const customers = job.customers || [];
 
   if (customers.length === 0) {
-    const amount = Number(job.amountPaid) || 0;
+    const amount = Math.max(
+      0,
+      (Number(job.amountPaid) || 0) -
+        (Number(job.installationMaterialsPrice ?? job.installationPrice) || 0),
+    );
     return amount > 0
       ? [{
           category: fallbackCategory,
@@ -48,7 +53,7 @@ export const getJobRevenueLines = (job: JobRevenueSource): JobRevenueLine[] => {
   }
 
   for (const customer of customers) {
-    const amount = (Number(customer.amountCollected) || 0) + (Number(customer.installationMaterialsPrice) || 0);
+    const amount = Number(customer.amountCollected) || 0;
     if (amount <= 0) continue;
 
     const category = customer.serviceCategory || fallbackCategory;

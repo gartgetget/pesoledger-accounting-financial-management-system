@@ -74,6 +74,7 @@ export const PayrollView: React.FC = () => {
       'Date': r.date,
       'Period': r.period,
       'Employee': r.employeeName,
+      'Area': r.area || '',
       'Days Worked': r.daysWorked || '',
       'Basic Salary': r.basicSalary,
       'Overtime': r.overtimePay,
@@ -230,6 +231,7 @@ export const PayrollView: React.FC = () => {
                 <th className="py-2.5 px-4">Date</th>
                 <th className="py-2.5 px-4 hidden md:table-cell">Period</th>
                 <th className="py-2.5 px-4">Employee</th>
+                <th className="py-2.5 px-4">Area</th>
                 <th className="py-2.5 px-4 text-right">Base Pay</th>
                 <th className="py-2.5 px-4 text-right hidden md:table-cell">Days</th>
                 <th className="py-2.5 px-4 text-right hidden md:table-cell">OT / Add-ons</th>
@@ -242,7 +244,7 @@ export const PayrollView: React.FC = () => {
             <tbody className="divide-y divide-slate-100 font-mono">
               {payrollRecords.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="py-8 text-center text-slate-400 text-xs font-sans">
+                  <td colSpan={11} className="py-8 text-center text-slate-400 text-xs font-sans">
                     No payroll disbursements recorded yet. Click "Process Payroll" to disburse wages.
                   </td>
                 </tr>
@@ -257,6 +259,9 @@ export const PayrollView: React.FC = () => {
                     </td>
                     <td className="py-2.5 px-4 font-sans font-bold text-slate-900 whitespace-nowrap">
                       {r.employeeName}
+                    </td>
+                    <td className="py-2.5 px-4 font-sans text-slate-600 whitespace-nowrap">
+                      {r.area || '—'}
                     </td>
                     <td className="py-2.5 px-4 text-right text-slate-700 tabular-nums">
                       {formatPHP(r.basicSalary)}

@@ -28,7 +28,7 @@ const resolveCategoryId = async (workspaceId: string, name: string): Promise<str
     });
     if (ci) id = ci._id.toString();
   }
-  if (!id && (name === "REFERRAL" || name === "PARTS / MATERIALS")) {
+  if (!id && (name === "REFERRAL" || name === "INSTALLATION MATERIALS" || name === "PARTS / MATERIALS")) {
     const category = await Category.create({
       workspaceId,
       type: "expense",
@@ -76,13 +76,16 @@ export async function runLedgerBackfill(): Promise<void> {
       const customers = Array.isArray(job.customers) ? job.customers : [];
       const customerRevenue = customers.reduce(
         (sum: number, customer: any) =>
-          sum + (Number(customer.amountCollected) || 0) + (Number(customer.installationMaterialsPrice) || 0),
+          sum + (Number(customer.amountCollected) || 0),
         0,
       );
-      const calculatedSubtotal = customers.length > 0 ? customerRevenue : Number(job.amountPaid || 0);
-      const subtotal = customers.length > 0
-        ? Math.max(calculatedSubtotal, Number(job.subtotal || 0))
-        : calculatedSubtotal;
+      const legacyInstallationMaterials = Number(
+        job.installationMaterialsPrice ?? job.installationPrice,
+      ) || 0;
+      const calculatedSubtotal = customers.length > 0
+        ? customerRevenue
+        : Math.max(0, (Number(job.amountPaid) || 0) - legacyInstallationMaterials);
+      const subtotal = calculatedSubtotal;
       const discountValue = Number(job.discountValue || 0);
       const requestedDiscount = job.discountType === "amount"
         ? discountValue
@@ -91,7 +94,13 @@ export async function runLedgerBackfill(): Promise<void> {
       job.subtotal = subtotal;
       job.discountAmount = discountAmount;
       job.totalAmount = Math.max(0, subtotal - discountAmount);
-      if (customers.length > 0) job.amountPaid = Math.max(customerRevenue, Number(job.amountPaid || 0));
+      if (customers.length > 0) job.amountPaid = customerRevenue;
+      else if (legacyInstallationMaterials > 0) {
+        job.amountPaid = Math.max(
+          0,
+          (Number(job.amountPaid) || 0) - legacyInstallationMaterials,
+        );
+      }
       const revenueLines = job.status === "cancelled"
         ? []
         : getJobRevenueLines({
@@ -142,6 +151,12 @@ export async function runLedgerBackfill(): Promise<void> {
       const legacyPartsAmount = Array.isArray(job.parts)
         ? job.parts.reduce((sum: number, part: any) => sum + (Number(part.price) || 0), 0)
         : 0;
+      const customerInstallationMaterialsAmount = customers.reduce(
+        (sum: number, customer: any) => sum + (Number(customer.installationMaterialsPrice) || 0),
+        0,
+      );
+      const installationMaterialsAmount = customerInstallationMaterialsAmount ||
+        Number(job.installationMaterialsPrice ?? job.installationPrice ?? 0) || 0;
       const partsAmount = customerPartsAmount || legacyPartsAmount;
       const nestedReferralAmount = customers.reduce(
         (sum: number, customer: any) => sum + (Number(customer.referralAmount) || 0),
@@ -150,6 +165,7 @@ export async function runLedgerBackfill(): Promise<void> {
       const referralAmount = nestedReferralAmount || Number(job.referralAmount ?? job.referralCost ?? 0) || 0;
       const expenses = [
         { category: "REFERRAL", amount: job.status !== "cancelled" ? referralAmount : 0 },
+        { category: "INSTALLATION MATERIALS", amount: job.status !== "cancelled" ? installationMaterialsAmount : 0 },
         { category: "PARTS / MATERIALS", amount: job.status !== "cancelled" ? partsAmount : 0 },
       ];
       const expenseIds: string[] = [];
@@ -274,12 +290,19 @@ export async function runLedgerBackfill(): Promise<void> {
           description: `Payroll — ${p.employeeName || ""} (${p.period || ""})`.trim(),
           amount: gross,
           paymentMethod: await resolvePaymentMethod(workspaceId, String(p.paymentMethodId || "")),
+          area: String(p.area || ""),
           relatedModule: "salary",
           relatedId: String(p._id),
           createdBy: String(p.createdBy || ""),
         });
         legacyFill.expenseId = exp._id.toString();
         expenseCount++;
+      } else {
+        const expense = await ExpenseEntry.findOne({ _id: linked, workspaceId });
+        if (expense && typeof p.area === "string" && String(expense.area || "") !== p.area) {
+          expense.area = String(p.area || "");
+          await expense.save();
+        }
       }
 
       if (Object.keys(legacyFill).length > 0) {

@@ -94,7 +94,7 @@ export const JobsView: React.FC<JobsViewProps> = ({ onOpenJobModal, onEditJob })
       'Description': j.description,
       'Total Billed': j.total,
       'Net After Job Expense': getJobCollection(j),
-      'Parts / Materials and Referral Expenses': getJobExpenseTotal(j),
+      'Installation Materials, Parts / Materials, and Referral Expenses': getJobExpenseTotal(j),
       'Status': j.paymentStatus,
     }));
     exportToExcel([{ sheetName: 'Service Orders', data: exportData }], `Service_Jobs_${new Date().toISOString().split('T')[0]}`);
@@ -128,7 +128,7 @@ export const JobsView: React.FC<JobsViewProps> = ({ onOpenJobModal, onEditJob })
             onClick={handleSyncJobOrders}
             disabled={isSyncingJobs}
             className="flex items-center gap-1.5 px-3 py-2 border border-slate-200 hover:border-slate-300 text-slate-700 text-xs font-semibold rounded-lg disabled:opacity-50 cursor-pointer"
-            title="Reconcile saved job-order parts and referral expenses into the expense ledger"
+            title="Reconcile saved job-order installation materials, parts, and referral expenses into the expense ledger"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isSyncingJobs ? 'animate-spin' : ''}`} />
             <span>{isSyncingJobs ? 'Syncing Expenses…' : 'Sync Job Expenses'}</span>
@@ -204,7 +204,7 @@ export const JobsView: React.FC<JobsViewProps> = ({ onOpenJobModal, onEditJob })
                 <th className="py-3 px-4 text-center">Job Status</th>
                 <th className="py-3 px-4 text-center hidden md:table-cell">Payment</th>
                 <th className="py-3 px-4 text-right">Net After Job Expense</th>
-                <th className="py-3 px-4 text-right">Parts / Materials + Referral Expenses</th>
+                <th className="py-3 px-4 text-right">Installation Materials + Parts / Materials + Referral Expenses</th>
                 <th className="py-3 px-4 text-center">Actions</th>
               </tr>
             </thead>

@@ -107,10 +107,10 @@ const sanitizeParts = (raw: unknown): Array<{ sku: string; invoice: string; desc
   return parts;
 };
 
-const sumCollected = (rows: Array<{ amountCollected: number; installationMaterialsPrice?: number }>) =>
+const sumCollected = (rows: Array<{ amountCollected: number }>) =>
   rows.reduce(
     (sum, customer) =>
-      sum + (Number(customer.amountCollected) || 0) + (Number(customer.installationMaterialsPrice) || 0),
+      sum + (Number(customer.amountCollected) || 0),
     0,
   );
 
@@ -122,7 +122,7 @@ const calculateJobTotals = (
 ) => {
   const customerAmount = customers.reduce(
       (sum, customer) =>
-        sum + (Number(customer.amountCollected) || 0) + (Number(customer.installationMaterialsPrice) || 0),
+        sum + (Number(customer.amountCollected) || 0),
       0,
     );
   const subtotal = customers.length > 0 ? customerAmount : fallbackAmount;
@@ -163,15 +163,25 @@ const getJobExpenseAmounts = (job: JobOrderDoc) => {
     (sum, part) => sum + (Number(part.price) || 0),
     0,
   );
+  const customerInstallationMaterialsAmount = customers.reduce(
+    (sum, customer) => sum + (Number(customer.installationMaterialsPrice) || 0),
+    0,
+  );
   const referralAmount = customers.reduce(
     (sum, customer) => sum + (Number(customer.referralAmount) || 0),
     0,
   );
-  const legacyJob = job as JobOrderDoc & { referralAmount?: number; referralCost?: number };
+  const legacyJob = job as JobOrderDoc & {
+    installationMaterialsPrice?: number;
+    referralAmount?: number;
+    referralCost?: number;
+  };
+  const legacyInstallationMaterialsAmount = Number(legacyJob.installationMaterialsPrice) || 0;
 
   return {
     referral: referralAmount || Number(legacyJob.referralAmount ?? legacyJob.referralCost ?? 0) || 0,
     parts: customerPartsAmount || legacyPartsAmount,
+    installationMaterials: customerInstallationMaterialsAmount || legacyInstallationMaterialsAmount,
   };
 };
 
@@ -193,6 +203,25 @@ const getJobPartsByPaymentMethod = (job: JobOrderDoc) => {
     }
   } else {
     addParts(job.parts || [], job.paymentMethodId || "Cash");
+  }
+  return [...amounts].map(([paymentMethod, amount]) => ({ paymentMethod, amount }));
+};
+
+const getJobInstallationMaterialsByPaymentMethod = (job: JobOrderDoc) => {
+  const amounts = new Map<string, number>();
+  const customers = Array.isArray(job.customers) ? job.customers : [];
+  for (const customer of customers) {
+    const amount = Number(customer.installationMaterialsPrice) || 0;
+    if (amount <= 0) continue;
+    const paymentMethod = customer.paymentMethodId || job.paymentMethodId || "Cash";
+    amounts.set(paymentMethod, (amounts.get(paymentMethod) || 0) + amount);
+  }
+  const legacyInstallationMaterialsAmount = Number(
+    (job as JobOrderDoc & { installationMaterialsPrice?: number }).installationMaterialsPrice,
+  ) || 0;
+  if (amounts.size === 0 && legacyInstallationMaterialsAmount > 0) {
+    const paymentMethod = job.paymentMethodId || "Cash";
+    amounts.set(paymentMethod, legacyInstallationMaterialsAmount);
   }
   return [...amounts].map(([paymentMethod, amount]) => ({ paymentMethod, amount }));
 };
@@ -239,6 +268,11 @@ const syncJobExpenses = async (workspaceId: string, job: JobOrderDoc, createdBy:
         ...(amounts.referral > 0
           ? [{ category: "REFERRAL", amount: amounts.referral, paymentMethod: job.paymentMethodId || "Cash" }]
           : []),
+        ...getJobInstallationMaterialsByPaymentMethod(job).map(({ paymentMethod, amount }) => ({
+          category: "INSTALLATION MATERIALS",
+          amount,
+          paymentMethod,
+        })),
         ...getJobPartsByPaymentMethod(job).map(({ paymentMethod, amount }) => ({
           category: "PARTS / MATERIALS",
           amount,
@@ -248,7 +282,7 @@ const syncJobExpenses = async (workspaceId: string, job: JobOrderDoc, createdBy:
     : [];
   const linkedExpenses: string[] = [];
 
-  for (const category of ["REFERRAL", "PARTS / MATERIALS"]) {
+  for (const category of ["REFERRAL", "INSTALLATION MATERIALS", "PARTS / MATERIALS"]) {
     const query = { workspaceId, relatedModule: "job", relatedId, category };
     const existingExpenses = await ExpenseEntry.find(query).sort({ createdAt: 1 });
     const remaining = [...existingExpenses];
@@ -317,7 +351,7 @@ const reconcileWorkspaceJobLedger = async (workspaceId: string, createdBy: strin
   const existingExpenses = await ExpenseEntry.find({
     workspaceId,
     relatedModule: "job",
-    category: { $in: ["REFERRAL", "PARTS / MATERIALS"] },
+    category: { $in: ["REFERRAL", "INSTALLATION MATERIALS", "PARTS / MATERIALS"] },
   }).lean();
   const expensesByJobCategory = new Map<string, typeof existingExpenses>();
   for (const expense of existingExpenses) {
@@ -328,7 +362,7 @@ const reconcileWorkspaceJobLedger = async (workspaceId: string, createdBy: strin
   }
 
   const categoryIds = new Map<string, string>();
-  for (const name of ["REFERRAL", "PARTS / MATERIALS"]) {
+  for (const name of ["REFERRAL", "INSTALLATION MATERIALS", "PARTS / MATERIALS"]) {
     categoryIds.set(name, await ensureJobExpenseCategory(workspaceId, name));
   }
 
@@ -336,6 +370,7 @@ const reconcileWorkspaceJobLedger = async (workspaceId: string, createdBy: strin
   const operations: Parameters<typeof ExpenseEntry.bulkWrite>[0] = [];
   const jobOperations: Parameters<typeof JobOrder.bulkWrite>[0] = [];
   let referralTotal = 0;
+  let installationMaterialsTotal = 0;
   let partsMaterialsTotal = 0;
   const now = new Date();
   for (const job of jobs) {
@@ -343,7 +378,7 @@ const reconcileWorkspaceJobLedger = async (workspaceId: string, createdBy: strin
     const customers = job.customers || [];
     const calculatedCustomerSubtotal = customers.reduce(
       (sum, customer) =>
-        sum + (Number(customer.amountCollected) || 0) + (Number(customer.installationMaterialsPrice) || 0),
+        sum + (Number(customer.amountCollected) || 0),
       0,
     );
     const jobSubtotal = customers.length > 0
@@ -412,6 +447,7 @@ const reconcileWorkspaceJobLedger = async (workspaceId: string, createdBy: strin
       REFERRAL: expenseAmounts.referral > 0
         ? [{ amount: expenseAmounts.referral, paymentMethod: job.paymentMethodId || "Cash" }]
         : [],
+      "INSTALLATION MATERIALS": getJobInstallationMaterialsByPaymentMethod(job as JobOrderDoc),
       "PARTS / MATERIALS": getJobPartsByPaymentMethod(job as JobOrderDoc),
     };
 
@@ -430,6 +466,7 @@ const reconcileWorkspaceJobLedger = async (workspaceId: string, createdBy: strin
         const legacyIndex = matchIndex < 0 && desired.length === 1 && remaining.length === 1 ? 0 : matchIndex;
         const matched = legacyIndex >= 0 ? remaining.splice(legacyIndex, 1)[0] : null;
         if (category === "REFERRAL") referralTotal += line.amount;
+        if (category === "INSTALLATION MATERIALS") installationMaterialsTotal += line.amount;
         if (category === "PARTS / MATERIALS") partsMaterialsTotal += line.amount;
         operations.push({
           updateOne: {
@@ -474,7 +511,7 @@ const reconcileWorkspaceJobLedger = async (workspaceId: string, createdBy: strin
   if (jobOperations.length > 0) {
     await JobOrder.bulkWrite(jobOperations, { ordered: false });
   }
-  return { synced: jobs.length, nextCursor, referralTotal, partsMaterialsTotal };
+  return { synced: jobs.length, nextCursor, referralTotal, installationMaterialsTotal, partsMaterialsTotal };
 };
 
 router.get("/:workspaceId/job-orders", ensureWorkspaceAccess, async (req, res) => {
@@ -487,11 +524,13 @@ router.get("/:workspaceId/job-orders", ensureWorkspaceAccess, async (req, res) =
         relatedId: { $in: jobIds },
       }).lean()
     : [];
-  const expenseTotals = new Map<string, { parts: number; referral: number }>();
+  const expenseTotals = new Map<string, { parts: number; installationMaterials: number; referral: number }>();
   for (const expense of linkedExpenses) {
-    const totals = expenseTotals.get(expense.relatedId) || { parts: 0, referral: 0 };
+    const totals = expenseTotals.get(expense.relatedId) || { parts: 0, installationMaterials: 0, referral: 0 };
     const normalizedCategory = expense.category.toUpperCase().replace(/[^A-Z]/g, "");
-    if (normalizedCategory.includes("PARTS") || normalizedCategory.includes("MATERIALS")) {
+    if (normalizedCategory.includes("INSTALLATIONMATERIALS")) {
+      totals.installationMaterials += expense.amount;
+    } else if (normalizedCategory.includes("PARTS") || normalizedCategory.includes("MATERIALS")) {
       totals.parts += expense.amount;
     } else if (normalizedCategory.includes("REFERRAL")) {
       totals.referral += expense.amount;
@@ -501,11 +540,15 @@ router.get("/:workspaceId/job-orders", ensureWorkspaceAccess, async (req, res) =
 
   res.json(jobs.map((job) => {
     const jobId = job._id.toString();
-    const storedTotals = expenseTotals.get(jobId) || { parts: 0, referral: 0 };
+    const storedTotals = expenseTotals.get(jobId) || { parts: 0, installationMaterials: 0, referral: 0 };
     const sourceTotals = getJobExpenseAmounts(job as JobOrderDoc);
     return {
       ...job,
       jobPartsExpense: Math.max(sourceTotals.parts, storedTotals.parts),
+      jobInstallationMaterialsExpense: Math.max(
+        sourceTotals.installationMaterials,
+        storedTotals.installationMaterials,
+      ),
       jobReferralExpense: Math.max(sourceTotals.referral, storedTotals.referral),
     };
   }));
@@ -728,7 +771,7 @@ router.delete("/:workspaceId/job-orders/:id", ensureWorkspaceAccess, async (req,
     workspaceId,
     relatedModule: "job",
     relatedId: job._id.toString(),
-    category: { $in: ["REFERRAL", "PARTS / MATERIALS"] },
+    category: { $in: ["REFERRAL", "INSTALLATION MATERIALS", "PARTS / MATERIALS"] },
   });
   await job.deleteOne();
   res.json({ message: "Job order deleted" });

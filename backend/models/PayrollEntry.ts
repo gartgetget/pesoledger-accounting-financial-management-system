@@ -4,6 +4,7 @@ export interface IPayrollEntry {
   workspaceId: string;
   employeeId: string;
   employeeName: string;
+  area: string;
   date: Date;
   period: string;
   daysWorked: number;
@@ -32,6 +33,7 @@ const payrollEntrySchema = new mongoose.Schema<IPayrollEntry>(
     workspaceId: { type: String, required: true, ref: "Workspace" },
     employeeId: { type: String, default: "" },
     employeeName: { type: String, required: true },
+    area: { type: String, default: "" },
     date: { type: Date, default: Date.now },
     period: { type: String, required: true },
     daysWorked: { type: Number, default: 0 },

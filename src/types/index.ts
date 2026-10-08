@@ -47,6 +47,7 @@ export interface PayrollRecord {
   id: string;
   employeeId: string;
   employeeName: string;
+  area?: string;
   date: string;
   period: string; // e.g. "Sept 1 - Sept 15, 2026"
   daysWorked?: number;
@@ -159,6 +160,7 @@ export interface ServiceJob {
   revenueId?: string;
   expenseId?: string;
   jobPartsExpense?: number;
+  jobInstallationMaterialsExpense?: number;
   jobReferralExpense?: number;
   createdAt: string;
 }
