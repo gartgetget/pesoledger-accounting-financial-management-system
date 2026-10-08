@@ -97,12 +97,10 @@ export const DailyAccountingView: React.FC<{
     });
 
     const costByArea: Record<string, number> = {};
-    dailyExpensesList
-      .filter((e) => e.relatedModule !== 'salary')
-      .forEach((e) => {
-        const key = e.area || 'Unassigned';
-        costByArea[key] = (costByArea[key] || 0) + (e.amount || 0);
-      });
+    dailyExpensesList.forEach((e) => {
+      const key = e.area || 'Unassigned';
+      costByArea[key] = (costByArea[key] || 0) + (e.amount || 0);
+    });
 
     const names = Array.from(
       new Set([...areas.map((a) => a.name), ...Object.keys(revByArea), ...Object.keys(costByArea)])

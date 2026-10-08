@@ -59,7 +59,7 @@ export const ReportsView: React.FC<{
   const areaReport = useMemo(() => {
     const periodRevenue = revenueTransactions.filter((r) => !r.isVoid && isDateInRange(r.date, dateRange));
     const periodExpenses = expenses.filter(
-      (e) => !e.isVoid && isDateInRange(e.date, dateRange) && e.relatedModule !== 'salary'
+      (e) => !e.isVoid && isDateInRange(e.date, dateRange)
     );
 
     const names = Array.from(
