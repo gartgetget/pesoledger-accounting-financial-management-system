@@ -282,6 +282,12 @@ const syncJobExpenses = async (workspaceId: string, job: JobOrderDoc, createdBy:
     : [];
   const linkedExpenses: string[] = [];
 
+  // Delete ALL existing expense entries for this job across all categories first
+  for (const category of ["REFERRAL", "INSTALLATION MATERIALS", "PARTS / MATERIALS"]) {
+    const query = { workspaceId, relatedModule: "job", relatedId: job._id.toString(), category };
+    await ExpenseEntry.deleteMany(query);
+  }
+
   for (const category of ["REFERRAL", "INSTALLATION MATERIALS", "PARTS / MATERIALS"]) {
     const query = { workspaceId, relatedModule: "job", relatedId, category };
     const existingExpenses = await ExpenseEntry.find(query).sort({ createdAt: 1 });
