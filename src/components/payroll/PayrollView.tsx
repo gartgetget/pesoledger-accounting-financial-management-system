@@ -29,6 +29,7 @@ export const PayrollView: React.FC = () => {
     updateEmployee,
     deletePayroll,
     userRole,
+    dateRange,
   } = useAccounting();
 
   const [isPayrollModalOpen, setIsPayrollModalOpen] = useState(false);
@@ -211,11 +212,15 @@ export const PayrollView: React.FC = () => {
       {/* PAYROLL VOUCHERS DISBURSEMENT TABLE */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
         <div className="p-4 border-b border-slate-100 flex items-center justify-between">
-          <div>
-            <h2 className="text-xs font-bold text-slate-900">Historical Wage & Payroll Vouchers</h2>
-            <p className="text-[11px] text-slate-500">Auto-posted to general expenses under category 'SALARY'</p>
-          </div>
-          <button
+<div>
+              <h2 className="text-xs font-bold text-slate-900">Historical Wage & Payroll Vouchers</h2>
+              <p className="text-[11px] text-slate-500">Auto-posted to general expenses under category 'SALARY'</p>
+              {dateRange.startDate && dateRange.endDate && (
+                <p className="text-[10px] text-slate-500 mt-1">Period: {formatDateDisplay(dateRange.startDate)} – {formatDateDisplay(dateRange.endDate)}
+              </p>
+            )}
+            </div>
+           <button
             onClick={handleExport}
             className="flex items-center gap-1.5 px-3 py-1.5 border border-slate-200 hover:border-slate-300 text-slate-700 rounded-lg text-xs font-medium cursor-pointer"
           >

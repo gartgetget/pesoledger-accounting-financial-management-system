@@ -16,7 +16,15 @@ const ensureWorkspaceAccess = (req: any, res: any, next: any) => {
 
 router.get("/:workspaceId/expenses", ensureWorkspaceAccess, async (req, res) => {
   const { workspaceId } = req.params;
-  const entries = await ExpenseEntry.find({ workspaceId }).sort({ date: -1 });
+  const { startDate, endDate } = req.query;
+  const filter: any = { workspaceId };
+  if (startDate && endDate) {
+    filter.date = {
+      $gte: new Date(startDate as string),
+      $lte: new Date(endDate as string),
+    };
+  }
+  const entries = await ExpenseEntry.find(filter).sort({ date: -1 });
   res.json(entries);
 });
 

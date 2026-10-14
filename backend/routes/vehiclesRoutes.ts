@@ -30,7 +30,15 @@ const findCategoryIdByName = async (workspaceId: string, name: string) => {
 
 router.get("/:workspaceId/vehicles", ensureWorkspaceAccess, async (req, res) => {
   const { workspaceId } = req.params;
-  const vehicles = await Vehicle.find({ workspaceId }).sort({ vehicleName: 1 });
+  const { startDate, endDate } = req.query;
+  const filter: any = { workspaceId };
+  if (startDate && endDate) {
+    filter.createdAt = {
+      $gte: new Date(startDate as string),
+      $lte: new Date(endDate as string),
+    };
+  }
+  const vehicles = await Vehicle.find(filter).sort({ vehicleName: 1 });
   res.json(vehicles);
 });
 
@@ -82,7 +90,15 @@ router.delete("/:workspaceId/vehicles/:id", ensureWorkspaceAccess, async (req, r
 
 router.get("/:workspaceId/vehicle-expenses", ensureWorkspaceAccess, async (req, res) => {
   const { workspaceId } = req.params;
-  const expenses = await VehicleExpense.find({ workspaceId }).sort({ date: -1 });
+  const { startDate, endDate } = req.query;
+  const filter: any = { workspaceId };
+  if (startDate && endDate) {
+    filter.date = {
+      $gte: new Date(startDate as string),
+      $lte: new Date(endDate as string),
+    };
+  }
+  const expenses = await VehicleExpense.find(filter).sort({ date: -1 });
   res.json(expenses);
 });
 

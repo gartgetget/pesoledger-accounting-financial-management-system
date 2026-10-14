@@ -34,7 +34,7 @@ const payrollEntrySchema = new mongoose.Schema<IPayrollEntry>(
     employeeId: { type: String, default: "" },
     employeeName: { type: String, required: true },
     area: { type: String, default: "" },
-    date: { type: Date, default: Date.now },
+      date: { type: Date, default: Date.now },
     period: { type: String, required: true },
     daysWorked: { type: Number, default: 0 },
     dailyRate: { type: Number, default: 0 },

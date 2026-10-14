@@ -27,7 +27,7 @@ interface JobsViewProps {
 }
 
 export const JobsView: React.FC<JobsViewProps> = ({ onOpenJobModal, onEditJob }) => {
-  const { serviceJobs, expenses, deleteServiceJob, userRole, syncJobOrderLedger } = useAccounting();
+  const { serviceJobs, expenses, deleteServiceJob, userRole, syncJobOrderLedger, dateRange } = useAccounting();
 
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
@@ -55,6 +55,13 @@ export const JobsView: React.FC<JobsViewProps> = ({ onOpenJobModal, onEditJob })
     return serviceJobs.filter((job) => {
       if (statusFilter !== 'ALL' && job.paymentStatus !== statusFilter) return false;
       if (categoryFilter !== 'ALL' && !getJobCategories(job).includes(categoryFilter)) return false;
+
+      if (dateRange.startDate && dateRange.endDate) {
+        const jobDate = new Date(job.date);
+        const start = new Date(dateRange.startDate);
+        const end = new Date(dateRange.endDate);
+        if (jobDate < start || jobDate > end) return false;
+      }
 
       if (searchTerm.trim()) {
         const q = searchTerm.toLowerCase();
@@ -145,7 +152,12 @@ export const JobsView: React.FC<JobsViewProps> = ({ onOpenJobModal, onEditJob })
 
       {/* FILTERS */}
       <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-2.5 flex-1 min-w-[280px]">
+        <div className="flex flex-col items-start gap-1.5 min-w-[280px]">
+          {dateRange.startDate && dateRange.endDate && (
+            <p className="text-[10px] text-slate-500">
+              Period: {formatDateDisplay(dateRange.startDate)} – {formatDateDisplay(dateRange.endDate)}
+            </p>
+          )}
           <div className="relative flex-1 min-w-[180px]">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input

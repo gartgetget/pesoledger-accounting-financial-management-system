@@ -55,7 +55,15 @@ type PayrollEntryDoc = InstanceType<typeof PayrollEntry>;
 
 router.get("/:workspaceId/payroll", ensureWorkspaceAccess, async (req, res) => {
   const { workspaceId } = req.params;
-  const payroll = await PayrollEntry.find({ workspaceId }).sort({ createdAt: -1 });
+  const { startDate, endDate } = req.query;
+  const filter: any = { workspaceId };
+  if (startDate && endDate) {
+    filter.date = {
+      $gte: new Date(startDate as string),
+      $lte: new Date(endDate as string),
+    };
+  }
+  const payroll = await PayrollEntry.find(filter).sort({ createdAt: -1 });
   res.json(payroll);
 });
 

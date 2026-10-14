@@ -32,6 +32,7 @@ export const Header: React.FC<HeaderProps> = ({
     dateRange,
     setCustomDateRange,
   } = useAccounting();
+  const { refetchAllData } = useAccounting();
 
   const [showCustomModal, setShowCustomModal] = useState(false);
   const [showPresetMenu, setShowPresetMenu] = useState(false);
@@ -119,7 +120,7 @@ export const Header: React.FC<HeaderProps> = ({
           return (
             <button
               key={p.id}
-              onClick={() => setDateFilterPreset(p.id)}
+              onClick={() => { setDateFilterPreset(p.id); refetchAllData(); }}
               className={`px-2.5 py-1 font-medium rounded-md transition-colors cursor-pointer whitespace-nowrap ${
                 isSelected
                   ? 'bg-white text-slate-900 shadow-xs font-semibold'
@@ -131,7 +132,7 @@ export const Header: React.FC<HeaderProps> = ({
           );
         })}
         <button
-          onClick={() => setShowCustomModal(true)}
+          onClick={() => { setShowCustomModal(true); refetchAllData(); }}
           className={`px-2.5 py-1 font-medium rounded-md transition-colors cursor-pointer flex items-center gap-1 whitespace-nowrap ${
             dateFilterPreset === 'custom'
               ? 'bg-white text-slate-900 shadow-xs font-semibold'
@@ -171,7 +172,7 @@ export const Header: React.FC<HeaderProps> = ({
                     <button
                       key={p.id}
                       onClick={() => {
-                        setDateFilterPreset(p.id);
+                        setDateFilterPreset(p.id); refetchAllData();
                         setShowPresetMenu(false);
                       }}
                       className={`w-full text-left px-3 py-2 text-xs font-medium transition-colors cursor-pointer ${

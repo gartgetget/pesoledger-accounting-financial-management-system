@@ -108,6 +108,7 @@ export interface AccountingContextType {
   batchImportData: (result: ImportInspectionResult) => void; resetToDefaultData: () => void;
   exportDatabaseJSON: () => void; importDatabaseJSON: (jsonString: string) => boolean;
   isApiLoading: boolean;
+  refetchAllData: () => Promise<void>;
   workspaces: BackendWorkspace[]; activeWorkspace: BackendWorkspace | null;
   fetchWorkspaces: () => Promise<void>; selectWorkspace: (id: string) => void; createWorkspace: (name: string) => Promise<void>;
 }
@@ -358,15 +359,16 @@ export const AccountingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       setIsLoadingData(true);
       try {
         const wsId = activeWorkspaceId;
+        const dateQuery = dateRange.startDate && dateRange.endDate ? `?startDate=${dateRange.startDate}&endDate=${dateRange.endDate}` : '';
         const [revData, expData, custData, jobData, catData, payData, vehData, vexpData, empData, pmData, areaData] = await Promise.all([
-          api.get<any[]>(`/api/${wsId}/revenue`).catch(() => []),
-          api.get<any[]>(`/api/${wsId}/expenses`).catch(() => []),
+          api.get<any[]>(`/api/${wsId}/revenue${dateQuery}`).catch(() => []),
+          api.get<any[]>(`/api/${wsId}/expenses${dateQuery}`).catch(() => []),
           api.get<any[]>(`/api/${wsId}/customers`).catch(() => []),
-          api.get<any[]>(`/api/${wsId}/job-orders`).catch(() => []),
+          api.get<any[]>(`/api/${wsId}/job-orders${dateQuery}`).catch(() => []),
           api.get<any[]>(`/api/${wsId}/categories`).catch(() => []),
-          api.get<any[]>(`/api/${wsId}/payroll`).catch(() => []),
-          api.get<any[]>(`/api/${wsId}/vehicles`).catch(() => []),
-          api.get<any[]>(`/api/${wsId}/vehicle-expenses`).catch(() => []),
+          api.get<any[]>(`/api/${wsId}/payroll${dateQuery}`).catch(() => []),
+          api.get<any[]>(`/api/${wsId}/vehicles${dateQuery}`).catch(() => []),
+          api.get<any[]>(`/api/${wsId}/vehicle-expenses${dateQuery}`).catch(() => []),
           api.get<any[]>(`/api/${wsId}/employees`).catch(() => []),
           api.get<any[]>(`/api/${wsId}/payment-methods`).catch(() => []),
           api.get<any[]>(`/api/${wsId}/areas`).catch(() => []),
@@ -391,19 +393,20 @@ export const AccountingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       }
     };
     fetchAllData();
-  }, [activeWorkspaceId, authIsAuthenticated]);
+  }, [activeWorkspaceId, authIsAuthenticated, dateFilterPreset]);
 
   const refetchAllData = async () => {
     if (!activeWorkspaceId || !authIsAuthenticated) return;
     try {
       const wsId = activeWorkspaceId;
+      const dateQuery = dateRange.startDate && dateRange.endDate ? `?startDate=${dateRange.startDate}&endDate=${dateRange.endDate}` : '';
       const [revData, expData, custData, jobData, catData, payData, vehData, vexpData, empData, pmData, areaData] = await Promise.all([
-        api.get<any[]>(`/api/${wsId}/revenue`).catch(() => []),
-        api.get<any[]>(`/api/${wsId}/expenses`).catch(() => []),
+        api.get<any[]>(`/api/${wsId}/revenue${dateQuery}`).catch(() => []),
+        api.get<any[]>(`/api/${wsId}/expenses${dateQuery}`).catch(() => []),
         api.get<any[]>(`/api/${wsId}/customers`).catch(() => []),
-        api.get<any[]>(`/api/${wsId}/job-orders`).catch(() => []),
+        api.get<any[]>(`/api/${wsId}/job-orders${dateQuery}`).catch(() => []),
         api.get<any[]>(`/api/${wsId}/categories`).catch(() => []),
-        api.get<any[]>(`/api/${wsId}/payroll`).catch(() => []),
+        api.get<any[]>(`/api/${wsId}/payroll${dateQuery}`).catch(() => []),
         api.get<any[]>(`/api/${wsId}/vehicles`).catch(() => []),
         api.get<any[]>(`/api/${wsId}/vehicle-expenses`).catch(() => []),
         api.get<any[]>(`/api/${wsId}/employees`).catch(() => []),
@@ -1181,6 +1184,7 @@ export const AccountingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       addArea, updateArea, deleteArea,
       batchImportData, resetToDefaultData, exportDatabaseJSON, importDatabaseJSON,
       isApiLoading: isLoadingData,
+      refetchAllData,
       workspaces, activeWorkspace,
       fetchWorkspaces, selectWorkspace, createWorkspace: authCreateWorkspace,
     }}>

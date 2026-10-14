@@ -285,38 +285,30 @@ const syncJobExpenses = async (workspaceId: string, job: JobOrderDoc, createdBy:
   for (const category of ["REFERRAL", "INSTALLATION MATERIALS", "PARTS / MATERIALS"]) {
     const query = { workspaceId, relatedModule: "job", relatedId, category };
     const existingExpenses = await ExpenseEntry.find(query).sort({ createdAt: 1 });
-    const remaining = [...existingExpenses];
     const desired = expenseAmounts.filter((expense) => expense.category === category);
     for (const { amount, paymentMethod } of desired) {
-      const matchIndex = remaining.findIndex((expense) => expense.paymentMethod === paymentMethod);
-      const legacyIndex = matchIndex < 0 && desired.length === 1 && remaining.length === 1 ? 0 : matchIndex;
-      const existing = legacyIndex >= 0 ? remaining.splice(legacyIndex, 1)[0] : null;
-      const payload = {
-        date: job.date,
-        categoryId: await ensureJobExpenseCategory(workspaceId, category),
-        category,
-        description: `${category} — Job ${job.jobNumber}${job.customerName ? ` — ${job.customerName}` : ""}`,
-        amount,
-        paymentMethod,
-        area: job.area || "",
-        relatedModule: "job",
-        relatedId,
-      };
+      const existing = existingExpenses.find(
+        (exp) => exp._id.toString() !== job.expenseId,
+      );
       if (existing) {
-        Object.assign(existing, payload);
-        existing.updatedAt = new Date();
+        Object.assign(existing, {
+          date: job.date,
+          categoryId: await ensureJobExpenseCategory(workspaceId, category),
+          category,
+          description: `${category} — Job ${job.jobNumber}${job.customerName ? ` — ${job.customerName}` : ""}`,
+          amount,
+          paymentMethod,
+          area: job.area || "",
+          relatedModule: "job",
+          relatedId,
+          updatedAt: new Date(),
+        });
         await existing.save();
         linkedExpenses.push(existing._id.toString());
       } else {
-        const expense = await ExpenseEntry.create({ workspaceId, ...payload, createdBy });
+        const expense = await ExpenseEntry.create({ workspaceId, ...{ date: job.date, categoryId: await ensureJobExpenseCategory(workspaceId, category), category, description: `${category} — Job ${job.jobNumber}${job.customerName ? ` — ${job.customerName}` : ""}`, amount, paymentMethod, area: job.area || "", relatedModule: "job", relatedId }, createdBy });
         linkedExpenses.push(expense._id.toString());
       }
-    }
-    if (remaining.length > 0) {
-      await ExpenseEntry.deleteMany({
-        ...query,
-        _id: { $in: remaining.map((expense) => expense._id) },
-      });
     }
     if (desired.length === 0 && existingExpenses.length > 0) {
       await ExpenseEntry.deleteMany(query);
@@ -516,7 +508,15 @@ const reconcileWorkspaceJobLedger = async (workspaceId: string, createdBy: strin
 
 router.get("/:workspaceId/job-orders", ensureWorkspaceAccess, async (req, res) => {
   const { workspaceId } = req.params;
-  const jobs = await JobOrder.find({ workspaceId }).sort({ createdAt: -1 }).lean();
+  const { startDate, endDate } = req.query;
+  const filter: any = { workspaceId };
+  if (startDate && endDate) {
+    filter.date = {
+      $gte: new Date(startDate as string),
+      $lte: new Date(endDate as string),
+    };
+  }
+  const jobs = await JobOrder.find(filter).sort({ createdAt: -1 }).lean();
   const jobIds = jobs.map((job) => job._id.toString());
   const linkedExpenses = jobIds.length
     ? await ExpenseEntry.find({
