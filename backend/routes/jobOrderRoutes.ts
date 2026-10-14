@@ -371,6 +371,13 @@ const reconcileWorkspaceJobLedger = async (workspaceId: string, createdBy: strin
   let installationMaterialsTotal = 0;
   let partsMaterialsTotal = 0;
   const now = new Date();
+  // Delete ALL existing expense entries for each job across all categories first
+  for (const job of jobs) {
+    for (const category of ["REFERRAL", "INSTALLATION MATERIALS", "PARTS / MATERIALS"]) {
+      const query = { workspaceId, relatedModule: "job", relatedId: job._id.toString(), category };
+      await ExpenseEntry.deleteMany(query);
+    }
+  }
   for (const job of jobs) {
     const relatedId = job._id.toString();
     const customers = job.customers || [];
