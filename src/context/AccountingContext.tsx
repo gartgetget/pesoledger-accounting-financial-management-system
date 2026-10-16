@@ -83,7 +83,6 @@ export interface AccountingContextType {
   addPart: (part: Omit<Part, 'id'>) => void; updatePart: (id: string, updates: Partial<Part>) => void; deletePart: (id: string) => void; restockPart: (id: string, qty: number) => void;
   createServiceJob: (job: Omit<ServiceJob, 'id' | 'createdAt'>) => Promise<string | null>;
   updateServiceJob: (id: string, updates: Partial<ServiceJob>) => Promise<boolean>; deleteServiceJob: (id: string) => void;
-  syncJobOrderLedger: () => Promise<number>;
   addEmployee: (employee: Omit<Employee, 'id'>) => void; updateEmployee: (id: string, updates: Partial<Employee>) => void;
   deleteEmployee: (id: string) => void; processPayroll: (record: Omit<PayrollRecord, 'id' | 'createdAt'>) => void;
   updatePayroll: (id: string, record: Partial<PayrollRecord>) => void; deletePayroll: (id: string) => void;
@@ -343,6 +342,7 @@ export const AccountingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
   const dateRange = useMemo<DateFilterRange>(() => {
     if (dateFilterPreset === 'custom' && customRange) return customRange;
+    if (dateFilterPreset === 'custom' && !customRange) return getDateRangeFromPreset(dateFilterPreset, getTodayDateString());
     return getDateRangeFromPreset(dateFilterPreset, getTodayDateString());
   }, [dateFilterPreset, customRange]);
 
@@ -393,7 +393,7 @@ export const AccountingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       }
     };
     fetchAllData();
-  }, [activeWorkspaceId, authIsAuthenticated, dateFilterPreset]);
+  }, [activeWorkspaceId, authIsAuthenticated, dateFilterPreset, dateRange.startDate, dateRange.endDate]);
 
   const refetchAllData = async () => {
     if (!activeWorkspaceId || !authIsAuthenticated) return;
@@ -428,110 +428,6 @@ export const AccountingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       setAreas(areaData.map((a: any) => ({ id: a._id, name: a.name })));
     } catch (e) {
       console.error('Failed to refetch workspace data', e);
-    }
-  };
-
-  const syncJobOrderLedger = async (): Promise<number> => {
-    if (!activeWorkspaceId || !authIsAuthenticated) {
-      throw new Error('Select an active workspace before syncing job orders');
-    }
-    try {
-      let after: string | undefined;
-      let synced = 0;
-      let referralTotal = 0;
-      let installationMaterialsTotal = 0;
-      let partsMaterialsTotal = 0;
-      try {
-        do {
-          const result = await api.post<{
-            synced: number;
-            nextCursor: string | null;
-            referralTotal: number;
-            installationMaterialsTotal: number;
-            partsMaterialsTotal: number;
-          }>(
-            `/api/${activeWorkspaceId}/job-orders/sync-ledger${after ? `?after=${encodeURIComponent(after)}` : ''}`,
-          );
-          synced += result.synced;
-          referralTotal += result.referralTotal || 0;
-          installationMaterialsTotal += result.installationMaterialsTotal || 0;
-          partsMaterialsTotal += result.partsMaterialsTotal || 0;
-          after = result.nextCursor || undefined;
-        } while (after);
-      } catch (syncError) {
-        const isMissingEndpoint =
-          typeof syncError === 'object' &&
-          syncError !== null &&
-          'status' in syncError &&
-          syncError.status === 404;
-        if (!isMissingEndpoint) throw syncError;
-
-        const jobData = await api.get<any[]>(`/api/${activeWorkspaceId}/job-orders`);
-        for (const job of jobData) {
-          const customers = Array.isArray(job.customers) ? job.customers : [];
-          const customerParts = customers.reduce(
-            (sum: number, customer: any) =>
-              sum +
-              (Array.isArray(customer.parts)
-                ? customer.parts.reduce((partSum: number, part: any) => partSum + (Number(part.price) || 0), 0)
-                : 0),
-            0,
-          );
-          const legacyParts = Array.isArray(job.parts)
-            ? job.parts.reduce((sum: number, part: any) => sum + (Number(part.price) || 0), 0)
-            : 0;
-          const customerInstallationMaterials = customers.reduce(
-            (sum: number, customer: any) => sum + (Number(customer.installationMaterialsPrice) || 0),
-            0,
-          );
-          const legacyInstallationMaterials = Number(
-            job.installationMaterialsPrice ?? job.installationPrice,
-          ) || 0;
-          const customerReferral = customers.reduce(
-            (sum: number, customer: any) => sum + (Number(customer.referralAmount) || 0),
-            0,
-          );
-          const referral = Math.max(
-            customerReferral,
-            Number(job.referralAmount ?? job.referralCost) || 0,
-          );
-          installationMaterialsTotal += customerInstallationMaterials || legacyInstallationMaterials;
-          partsMaterialsTotal += customerParts || legacyParts;
-          referralTotal += referral;
-
-          const jobId = job._id || job.id;
-          if (!jobId) throw new Error('Cannot sync a job order without an ID');
-          await api.put(`/api/${activeWorkspaceId}/job-orders/${jobId}`, {
-            ...(Array.isArray(job.customers) ? { customers: job.customers } : {}),
-            ...(job.amountPaid !== undefined ? { amountPaid: Number(job.amountPaid) || 0 } : {}),
-            ...(job.status ? { status: job.status } : {}),
-          });
-          synced += 1;
-        }
-      }
-      const [revData, expData, jobData, catData] = await Promise.all([
-        api.get<any[]>(`/api/${activeWorkspaceId}/revenue`),
-        api.get<any[]>(`/api/${activeWorkspaceId}/expenses`),
-        api.get<any[]>(`/api/${activeWorkspaceId}/job-orders`),
-        api.get<any[]>(`/api/${activeWorkspaceId}/categories`),
-      ]);
-      setRevenueTransactions(revData.map(mapBackendRevenue));
-      setExpenses(expData.map(mapBackendExpense));
-      setServiceJobs(jobData.map(mapBackendJob));
-      setExpenseCategories(catData.filter((category: any) => category.type === 'expense').map((category: any) => ({
-        id: category._id,
-        name: category.name,
-        description: category.description,
-        isDefault: false,
-      })));
-      toast.success(
-        `Synced ${synced} job order${synced === 1 ? '' : 's'} — Referral: ₱${referralTotal.toLocaleString()}, Installation Materials: ₱${installationMaterialsTotal.toLocaleString()}, Parts / Materials: ₱${partsMaterialsTotal.toLocaleString()}`,
-      );
-      return synced;
-    } catch (error) {
-      console.error('Failed to reconcile job-order ledger entries', error);
-      toast.error(`Could not reconcile job-order ledgers: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      throw error;
     }
   };
 
@@ -1173,7 +1069,7 @@ export const AccountingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       addRevenueTransaction, updateRevenueTransaction, voidRevenueTransaction,
       addExpense, addExpensesBatch, updateExpense, voidExpense,
       addPart, updatePart, deletePart, restockPart,
-      createServiceJob, updateServiceJob, deleteServiceJob, syncJobOrderLedger,
+      createServiceJob, updateServiceJob, deleteServiceJob,
       addEmployee, updateEmployee, deleteEmployee, processPayroll, updatePayroll, deletePayroll,
       addVehicle, updateVehicle, deleteVehicle, addVehicleExpense, addVehicleExpensesBatch, deleteVehicleExpense,
       addCustomer, updateCustomer, deleteCustomer,

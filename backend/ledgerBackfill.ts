@@ -7,6 +7,12 @@ import PayrollEntry from "./models/PayrollEntry.js";
 import PaymentMethod from "./models/PaymentMethod.js";
 import Category from "./models/Category.js";
 import { getJobRevenueLines } from "./jobRevenue.js";
+import {
+  JobExpenseSource,
+  getJobInstallationMaterialsByPaymentMethod,
+  getJobPartsByPaymentMethod,
+  getJobReferralByPaymentMethod,
+} from "./jobExpenses.js";
 
 let ran = false;
 
@@ -141,71 +147,59 @@ export async function runLedgerBackfill(): Promise<void> {
       }
       job.revenueId = syncedRevenueIds[0] || "";
 
-      const customerPartsAmount = customers.reduce(
-        (sum: number, customer: any) =>
-          sum + (Array.isArray(customer.parts)
-            ? customer.parts.reduce((partSum: number, part: any) => partSum + (Number(part.price) || 0), 0)
-            : 0),
-        0,
-      );
-      const legacyPartsAmount = Array.isArray(job.parts)
-        ? job.parts.reduce((sum: number, part: any) => sum + (Number(part.price) || 0), 0)
-        : 0;
-      const customerInstallationMaterialsAmount = customers.reduce(
-        (sum: number, customer: any) => sum + (Number(customer.installationMaterialsPrice) || 0),
-        0,
-      );
-      const installationMaterialsAmount = customerInstallationMaterialsAmount ||
-        Number(job.installationMaterialsPrice ?? job.installationPrice ?? 0) || 0;
-      const partsAmount = customerPartsAmount || legacyPartsAmount;
-      const nestedReferralAmount = customers.reduce(
-        (sum: number, customer: any) => sum + (Number(customer.referralAmount) || 0),
-        0,
-      );
-      const referralAmount = nestedReferralAmount || Number(job.referralAmount ?? job.referralCost ?? 0) || 0;
-      const expenses = [
-        { category: "REFERRAL", amount: job.status !== "cancelled" ? referralAmount : 0 },
-        { category: "INSTALLATION MATERIALS", amount: job.status !== "cancelled" ? installationMaterialsAmount : 0 },
-        { category: "PARTS / MATERIALS", amount: job.status !== "cancelled" ? partsAmount : 0 },
-      ];
+      const shouldPost = job.status !== "cancelled";
+      const expenseSource = job as unknown as JobExpenseSource;
+      const desiredExpenses: Record<string, Array<{ paymentMethod: string; amount: number }>> = {
+        REFERRAL: shouldPost ? getJobReferralByPaymentMethod(expenseSource) : [],
+        "INSTALLATION MATERIALS": shouldPost ? getJobInstallationMaterialsByPaymentMethod(expenseSource) : [],
+        "PARTS / MATERIALS": shouldPost ? getJobPartsByPaymentMethod(expenseSource) : [],
+      };
       const expenseIds: string[] = [];
-      for (const { category, amount } of expenses) {
+      for (const category of ["REFERRAL", "INSTALLATION MATERIALS", "PARTS / MATERIALS"]) {
         const query = {
           workspaceId,
           relatedModule: "job",
           relatedId: String(job._id),
           category,
         };
-        const existingExpense = await ExpenseEntry.findOne(query);
-        if (amount <= 0) {
-          if (existingExpense) await existingExpense.deleteOne();
-          continue;
+        const existingRows = await ExpenseEntry.find(query).sort({ createdAt: 1 });
+        const remaining = [...existingRows];
+        for (const { amount, paymentMethod } of desiredExpenses[category]) {
+          const matchIndex = remaining.findIndex(
+            (expense) => (expense.paymentMethod || "Cash") === (paymentMethod || "Cash"),
+          );
+          const existingExpense = matchIndex >= 0 ? remaining.splice(matchIndex, 1)[0] : null;
+          const payload = {
+            date: job.date || job.createdAt || new Date(),
+            categoryId: await resolveCategoryId(workspaceId, category),
+            category,
+            description: `${category} — Job ${job.jobNumber}${job.customerName ? ` — ${job.customerName}` : ""}`,
+            amount,
+            paymentMethod: await resolvePaymentMethod(workspaceId, String(paymentMethod || "")),
+            area: String(job.area || ""),
+            relatedModule: "job",
+            relatedId: String(job._id),
+          };
+          if (existingExpense) {
+            Object.assign(existingExpense, payload);
+            existingExpense.updatedAt = new Date();
+            await existingExpense.save();
+            expenseIds.push(existingExpense._id.toString());
+          } else {
+            const expense = await ExpenseEntry.create({
+              workspaceId,
+              ...payload,
+              createdBy: String(job.createdBy || ""),
+            });
+            expenseIds.push(expense._id.toString());
+            expenseCount++;
+          }
         }
-
-        const payload = {
-          date: job.date || job.createdAt || new Date(),
-          categoryId: await resolveCategoryId(workspaceId, category),
-          category,
-          description: `${category} — Job ${job.jobNumber}${job.customerName ? ` — ${job.customerName}` : ""}`,
-          amount,
-          paymentMethod: await resolvePaymentMethod(workspaceId, String(job.paymentMethodId || "")),
-          area: String(job.area || ""),
-          relatedModule: "job",
-          relatedId: String(job._id),
-        };
-        if (existingExpense) {
-          Object.assign(existingExpense, payload);
-          existingExpense.updatedAt = new Date();
-          await existingExpense.save();
-          expenseIds.push(existingExpense._id.toString());
-        } else {
-          const expense = await ExpenseEntry.create({
+        if (remaining.length > 0) {
+          await ExpenseEntry.deleteMany({
+            _id: { $in: remaining.map((expense) => expense._id) },
             workspaceId,
-            ...payload,
-            createdBy: String(job.createdBy || ""),
           });
-          expenseIds.push(expense._id.toString());
-          expenseCount++;
         }
       }
       job.expenseId = expenseIds[0] || "";

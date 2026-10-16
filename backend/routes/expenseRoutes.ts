@@ -19,9 +19,11 @@ router.get("/:workspaceId/expenses", ensureWorkspaceAccess, async (req, res) => 
   const { startDate, endDate } = req.query;
   const filter: any = { workspaceId };
   if (startDate && endDate) {
+    const end = new Date(endDate as string);
+    end.setUTCDate(end.getUTCDate() + 1);
     filter.date = {
       $gte: new Date(startDate as string),
-      $lte: new Date(endDate as string),
+      $lt: end,
     };
   }
   const entries = await ExpenseEntry.find(filter).sort({ date: -1 });
@@ -148,7 +150,7 @@ router.delete("/:workspaceId/expenses/:id", ensureWorkspaceAccess, async (req, r
   }
 
   await entry.deleteOne();
-  res.json({ message: "Expense entry deleted" });
+  res.json({ message: "Expense entry deleted" }); 
 });
 
 export default router;

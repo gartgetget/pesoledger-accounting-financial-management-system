@@ -4,6 +4,12 @@ import RevenueEntry from "../models/RevenueEntry.js";
 import ExpenseEntry from "../models/ExpenseEntry.js";
 import Category from "../models/Category.js";
 import { getJobRevenueLines } from "../jobRevenue.js";
+import {
+  getJobExpenseTotals,
+  getJobInstallationMaterialsByPaymentMethod,
+  getJobPartsByPaymentMethod,
+  getJobReferralByPaymentMethod,
+} from "../jobExpenses.js";
 import auth from "../middleware/auth.js";
 
 const router = createRouter();
@@ -152,80 +158,6 @@ const ensureJobExpenseCategory = async (workspaceId: string, name: string): Prom
   return category._id.toString();
 };
 
-const getJobExpenseAmounts = (job: JobOrderDoc) => {
-  const customers = Array.isArray(job.customers) ? job.customers : [];
-  const customerPartsAmount = customers.reduce(
-    (sum, customer) =>
-      sum + (customer.parts || []).reduce((partSum, part) => partSum + (Number(part.price) || 0), 0),
-    0,
-  );
-  const legacyPartsAmount = (job.parts || []).reduce(
-    (sum, part) => sum + (Number(part.price) || 0),
-    0,
-  );
-  const customerInstallationMaterialsAmount = customers.reduce(
-    (sum, customer) => sum + (Number(customer.installationMaterialsPrice) || 0),
-    0,
-  );
-  const referralAmount = customers.reduce(
-    (sum, customer) => sum + (Number(customer.referralAmount) || 0),
-    0,
-  );
-  const legacyJob = job as JobOrderDoc & {
-    installationMaterialsPrice?: number;
-    referralAmount?: number;
-    referralCost?: number;
-  };
-  const legacyInstallationMaterialsAmount = Number(legacyJob.installationMaterialsPrice) || 0;
-
-  return {
-    referral: referralAmount || Number(legacyJob.referralAmount ?? legacyJob.referralCost ?? 0) || 0,
-    parts: customerPartsAmount || legacyPartsAmount,
-    installationMaterials: customerInstallationMaterialsAmount || legacyInstallationMaterialsAmount,
-  };
-};
-
-const getJobPartsByPaymentMethod = (job: JobOrderDoc) => {
-  const amounts = new Map<string, number>();
-  const customers = Array.isArray(job.customers) ? job.customers : [];
-  const addParts = (parts: Array<{ price?: number; paymentMethodId?: string }>, fallbackMethod: string) => {
-    for (const part of parts || []) {
-      const amount = Number(part.price) || 0;
-      if (amount <= 0) continue;
-      const paymentMethod = part.paymentMethodId || fallbackMethod || "Cash";
-      amounts.set(paymentMethod, (amounts.get(paymentMethod) || 0) + amount);
-    }
-  };
-
-  if (customers.length > 0) {
-    for (const customer of customers) {
-      addParts(customer.parts || [], customer.paymentMethodId || job.paymentMethodId || "Cash");
-    }
-  } else {
-    addParts(job.parts || [], job.paymentMethodId || "Cash");
-  }
-  return [...amounts].map(([paymentMethod, amount]) => ({ paymentMethod, amount }));
-};
-
-const getJobInstallationMaterialsByPaymentMethod = (job: JobOrderDoc) => {
-  const amounts = new Map<string, number>();
-  const customers = Array.isArray(job.customers) ? job.customers : [];
-  for (const customer of customers) {
-    const amount = Number(customer.installationMaterialsPrice) || 0;
-    if (amount <= 0) continue;
-    const paymentMethod = customer.paymentMethodId || job.paymentMethodId || "Cash";
-    amounts.set(paymentMethod, (amounts.get(paymentMethod) || 0) + amount);
-  }
-  const legacyInstallationMaterialsAmount = Number(
-    (job as JobOrderDoc & { installationMaterialsPrice?: number }).installationMaterialsPrice,
-  ) || 0;
-  if (amounts.size === 0 && legacyInstallationMaterialsAmount > 0) {
-    const paymentMethod = job.paymentMethodId || "Cash";
-    amounts.set(paymentMethod, legacyInstallationMaterialsAmount);
-  }
-  return [...amounts].map(([paymentMethod, amount]) => ({ paymentMethod, amount }));
-};
-
 const syncJobRevenue = async (workspaceId: string, job: JobOrderDoc, createdBy: string) => {
   const relatedId = job._id.toString();
   const lines = job.status === "cancelled" ? [] : getJobRevenueLines(job);
@@ -262,62 +194,51 @@ const syncJobRevenue = async (workspaceId: string, job: JobOrderDoc, createdBy: 
 const syncJobExpenses = async (workspaceId: string, job: JobOrderDoc, createdBy: string) => {
   const relatedId = job._id.toString();
   const shouldPost = job.status !== "cancelled";
-  const amounts = getJobExpenseAmounts(job);
-  const expenseAmounts = shouldPost
-    ? [
-        ...(amounts.referral > 0
-          ? [{ category: "REFERRAL", amount: amounts.referral, paymentMethod: job.paymentMethodId || "Cash" }]
-          : []),
-        ...getJobInstallationMaterialsByPaymentMethod(job).map(({ paymentMethod, amount }) => ({
-          category: "INSTALLATION MATERIALS",
-          amount,
-          paymentMethod,
-        })),
-        ...getJobPartsByPaymentMethod(job).map(({ paymentMethod, amount }) => ({
-          category: "PARTS / MATERIALS",
-          amount,
-          paymentMethod,
-        })),
-      ]
-    : [];
+  const desiredByCategory: Record<string, Array<{ paymentMethod: string; amount: number }>> = {
+    REFERRAL: shouldPost ? getJobReferralByPaymentMethod(job) : [],
+    "INSTALLATION MATERIALS": shouldPost ? getJobInstallationMaterialsByPaymentMethod(job) : [],
+    "PARTS / MATERIALS": shouldPost ? getJobPartsByPaymentMethod(job) : [],
+  };
   const linkedExpenses: string[] = [];
-
-  // Delete ALL existing expense entries for this job across all categories first
-  for (const category of ["REFERRAL", "INSTALLATION MATERIALS", "PARTS / MATERIALS"]) {
-    const query = { workspaceId, relatedModule: "job", relatedId: job._id.toString(), category };
-    await ExpenseEntry.deleteMany(query);
-  }
 
   for (const category of ["REFERRAL", "INSTALLATION MATERIALS", "PARTS / MATERIALS"]) {
     const query = { workspaceId, relatedModule: "job", relatedId, category };
     const existingExpenses = await ExpenseEntry.find(query).sort({ createdAt: 1 });
-    const desired = expenseAmounts.filter((expense) => expense.category === category);
+    const desired = desiredByCategory[category];
+    const remaining = [...existingExpenses];
+
     for (const { amount, paymentMethod } of desired) {
-      const existing = existingExpenses.find(
-        (exp) => exp._id.toString() !== job.expenseId,
+      const matchIndex = remaining.findIndex(
+        (exp) => (exp.paymentMethod || "Cash") === (paymentMethod || "Cash"),
       );
+      const existing = matchIndex >= 0 ? remaining.splice(matchIndex, 1)[0] : null;
+      const payload = {
+        date: job.date,
+        categoryId: await ensureJobExpenseCategory(workspaceId, category),
+        category,
+        description: `${category} — Job ${job.jobNumber}${job.customerName ? ` — ${job.customerName}` : ""}`,
+        amount,
+        paymentMethod,
+        area: job.area || "",
+        relatedModule: "job",
+        relatedId,
+        updatedAt: new Date(),
+      };
       if (existing) {
-        Object.assign(existing, {
-          date: job.date,
-          categoryId: await ensureJobExpenseCategory(workspaceId, category),
-          category,
-          description: `${category} — Job ${job.jobNumber}${job.customerName ? ` — ${job.customerName}` : ""}`,
-          amount,
-          paymentMethod,
-          area: job.area || "",
-          relatedModule: "job",
-          relatedId,
-          updatedAt: new Date(),
-        });
+        Object.assign(existing, payload);
         await existing.save();
         linkedExpenses.push(existing._id.toString());
       } else {
-        const expense = await ExpenseEntry.create({ workspaceId, ...{ date: job.date, categoryId: await ensureJobExpenseCategory(workspaceId, category), category, description: `${category} — Job ${job.jobNumber}${job.customerName ? ` — ${job.customerName}` : ""}`, amount, paymentMethod, area: job.area || "", relatedModule: "job", relatedId }, createdBy });
+        const expense = await ExpenseEntry.create({ workspaceId, ...payload, createdBy });
         linkedExpenses.push(expense._id.toString());
       }
     }
-    if (desired.length === 0 && existingExpenses.length > 0) {
-      await ExpenseEntry.deleteMany(query);
+
+    if (remaining.length > 0) {
+      await ExpenseEntry.deleteMany({
+        _id: { $in: remaining.map((expense) => expense._id) },
+        workspaceId,
+      });
     }
   }
 
@@ -371,13 +292,6 @@ const reconcileWorkspaceJobLedger = async (workspaceId: string, createdBy: strin
   let installationMaterialsTotal = 0;
   let partsMaterialsTotal = 0;
   const now = new Date();
-  // Delete ALL existing expense entries for each job across all categories first
-  for (const job of jobs) {
-    for (const category of ["REFERRAL", "INSTALLATION MATERIALS", "PARTS / MATERIALS"]) {
-      const query = { workspaceId, relatedModule: "job", relatedId: job._id.toString(), category };
-      await ExpenseEntry.deleteMany(query);
-    }
-  }
   for (const job of jobs) {
     const relatedId = job._id.toString();
     const customers = job.customers || [];
@@ -447,13 +361,10 @@ const reconcileWorkspaceJobLedger = async (workspaceId: string, createdBy: strin
       revenueOperations.push({ deleteMany: { filter: revenueQuery } });
     }
 
-    const expenseAmounts = getJobExpenseAmounts(job as JobOrderDoc);
     const amounts: Record<string, Array<{ amount: number; paymentMethod: string }>> = {
-      REFERRAL: expenseAmounts.referral > 0
-        ? [{ amount: expenseAmounts.referral, paymentMethod: job.paymentMethodId || "Cash" }]
-        : [],
-      "INSTALLATION MATERIALS": getJobInstallationMaterialsByPaymentMethod(job as JobOrderDoc),
-      "PARTS / MATERIALS": getJobPartsByPaymentMethod(job as JobOrderDoc),
+      REFERRAL: getJobReferralByPaymentMethod(job),
+      "INSTALLATION MATERIALS": getJobInstallationMaterialsByPaymentMethod(job),
+      "PARTS / MATERIALS": getJobPartsByPaymentMethod(job),
     };
 
     for (const [category, desired] of Object.entries(amounts)) {
@@ -524,9 +435,11 @@ router.get("/:workspaceId/job-orders", ensureWorkspaceAccess, async (req, res) =
   const { startDate, endDate } = req.query;
   const filter: any = { workspaceId };
   if (startDate && endDate) {
+    const end = new Date(endDate as string);
+    end.setUTCDate(end.getUTCDate() + 1);
     filter.date = {
       $gte: new Date(startDate as string),
-      $lte: new Date(endDate as string),
+      $lt: end,
     };
   }
   const jobs = await JobOrder.find(filter).sort({ createdAt: -1 }).lean();
@@ -554,7 +467,7 @@ router.get("/:workspaceId/job-orders", ensureWorkspaceAccess, async (req, res) =
   res.json(jobs.map((job) => {
     const jobId = job._id.toString();
     const storedTotals = expenseTotals.get(jobId) || { parts: 0, installationMaterials: 0, referral: 0 };
-    const sourceTotals = getJobExpenseAmounts(job as JobOrderDoc);
+    const sourceTotals = getJobExpenseTotals(job);
     return {
       ...job,
       jobPartsExpense: Math.max(sourceTotals.parts, storedTotals.parts),

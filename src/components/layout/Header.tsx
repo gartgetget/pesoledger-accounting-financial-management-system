@@ -10,7 +10,7 @@ import {
   Menu,
 } from 'lucide-react';
 import { useAccounting } from '../../context/AccountingContext';
-import { DateRangePreset } from '../../utils/date';
+import { DateRangePreset, getTodayDateString } from '../../utils/date';
 
 interface HeaderProps {
   onOpenRevenueModal: () => void;
@@ -32,7 +32,6 @@ export const Header: React.FC<HeaderProps> = ({
     dateRange,
     setCustomDateRange,
   } = useAccounting();
-  const { refetchAllData } = useAccounting();
 
   const [showCustomModal, setShowCustomModal] = useState(false);
   const [showPresetMenu, setShowPresetMenu] = useState(false);
@@ -82,12 +81,18 @@ export const Header: React.FC<HeaderProps> = ({
     { id: 'all', label: 'All Time' },
   ];
 
+  const openCustomModal = () => {
+    setStartInput(dateRange.startDate || getTodayDateString());
+    setEndInput(dateRange.endDate || getTodayDateString());
+    setShowCustomModal(true);
+  };
+
   const handleApplyCustom = (e: React.FormEvent) => {
     e.preventDefault();
-    if (startInput && endInput) {
-      setCustomDateRange({ startDate: startInput, endDate: endInput });
-      setShowCustomModal(false);
-    }
+    if (!startInput || !endInput) return;
+    const [start, end] = startInput <= endInput ? [startInput, endInput] : [endInput, startInput];
+    setCustomDateRange({ startDate: start, endDate: end });
+    setShowCustomModal(false);
   };
 
   return (
@@ -120,7 +125,7 @@ export const Header: React.FC<HeaderProps> = ({
           return (
             <button
               key={p.id}
-              onClick={() => { setDateFilterPreset(p.id); refetchAllData(); }}
+              onClick={() => setDateFilterPreset(p.id)}
               className={`px-2.5 py-1 font-medium rounded-md transition-colors cursor-pointer whitespace-nowrap ${
                 isSelected
                   ? 'bg-white text-slate-900 shadow-xs font-semibold'
@@ -132,7 +137,7 @@ export const Header: React.FC<HeaderProps> = ({
           );
         })}
         <button
-          onClick={() => { setShowCustomModal(true); refetchAllData(); }}
+          onClick={openCustomModal}
           className={`px-2.5 py-1 font-medium rounded-md transition-colors cursor-pointer flex items-center gap-1 whitespace-nowrap ${
             dateFilterPreset === 'custom'
               ? 'bg-white text-slate-900 shadow-xs font-semibold'
@@ -172,7 +177,7 @@ export const Header: React.FC<HeaderProps> = ({
                     <button
                       key={p.id}
                       onClick={() => {
-                        setDateFilterPreset(p.id); refetchAllData();
+                        setDateFilterPreset(p.id);
                         setShowPresetMenu(false);
                       }}
                       className={`w-full text-left px-3 py-2 text-xs font-medium transition-colors cursor-pointer ${
@@ -186,7 +191,7 @@ export const Header: React.FC<HeaderProps> = ({
                 <button
                   onClick={() => {
                     setShowPresetMenu(false);
-                    setShowCustomModal(true);
+                    openCustomModal();
                   }}
                   className={`w-full text-left px-3 py-2 text-xs font-medium border-t border-slate-100 transition-colors cursor-pointer flex items-center gap-1.5 ${
                     dateFilterPreset === 'custom' ? 'bg-emerald-50 text-emerald-700' : 'text-slate-600 hover:bg-slate-50'

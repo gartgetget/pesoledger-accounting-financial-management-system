@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import { useAccounting } from '../../context/AccountingContext';
 import { formatPHP } from '../../utils/currency';
-import { getMonthName, getTodayDateString, formatDateDisplay, formatDateString } from '../../utils/date';
+import { getMonthName, getTodayDateString, formatDateDisplay, formatDateString, isDateInRange } from '../../utils/date';
 import { CategoryHorizontalBars, PaymentMethodDistribution } from '../dashboard/Charts';
 import { exportToExcel } from '../../utils/excel';
 
@@ -36,7 +36,7 @@ export const MonthlyAccountingView: React.FC = () => {
     const map: Record<string, { revenue: number; expenses: number; count: number }> = {};
 
     revenueTransactions
-      .filter((r) => !r.isVoid && r.date >= monthRange.startDate && r.date <= monthRange.endDate)
+      .filter((r) => !r.isVoid && isDateInRange(r.date, monthRange))
       .forEach((r) => {
         if (!map[r.date]) map[r.date] = { revenue: 0, expenses: 0, count: 0 };
         map[r.date].revenue += r.amount;
@@ -44,7 +44,7 @@ export const MonthlyAccountingView: React.FC = () => {
       });
 
     expenses
-      .filter((e) => !e.isVoid && e.date >= monthRange.startDate && e.date <= monthRange.endDate)
+      .filter((e) => !e.isVoid && isDateInRange(e.date, monthRange))
       .forEach((e) => {
         if (!map[e.date]) map[e.date] = { revenue: 0, expenses: 0, count: 0 };
         map[e.date].expenses += e.amount;

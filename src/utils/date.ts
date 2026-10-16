@@ -120,6 +120,7 @@ export const getDateRangeFromPreset = (
 };
 
 export const isDateInRange = (dateStr: string, range: DateFilterRange): boolean => {
-  if (!dateStr) return false;
-  return dateStr >= range.startDate && dateStr <= range.endDate;
+  if (!dateStr || !range.startDate || !range.endDate) return false;
+  const date = String(dateStr).slice(0, 10);
+  return date >= range.startDate.slice(0, 10) && date <= range.endDate.slice(0, 10);
 };

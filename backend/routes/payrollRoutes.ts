@@ -58,9 +58,11 @@ router.get("/:workspaceId/payroll", ensureWorkspaceAccess, async (req, res) => {
   const { startDate, endDate } = req.query;
   const filter: any = { workspaceId };
   if (startDate && endDate) {
+    const end = new Date(endDate as string);
+    end.setUTCDate(end.getUTCDate() + 1);
     filter.date = {
       $gte: new Date(startDate as string),
-      $lte: new Date(endDate as string),
+      $lt: end,
     };
   }
   const payroll = await PayrollEntry.find(filter).sort({ createdAt: -1 });

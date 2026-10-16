@@ -18,7 +18,17 @@ const ensureWorkspaceAccess = (req: any, res: any, next: any) => {
 
 router.get("/:workspaceId/revenue", ensureWorkspaceAccess, async (req, res) => {
   const { workspaceId } = req.params;
-  const entries = await RevenueEntry.find({ workspaceId }).sort({ date: -1 });
+  const { startDate, endDate } = req.query;
+  const filter: any = { workspaceId };
+  if (startDate && endDate) {
+    const end = new Date(endDate as string);
+    end.setUTCDate(end.getUTCDate() + 1);
+    filter.date = {
+      $gte: new Date(startDate as string),
+      $lt: end,
+    };
+  }
+  const entries = await RevenueEntry.find(filter).sort({ date: -1 });
   res.json(entries);
 });
 
