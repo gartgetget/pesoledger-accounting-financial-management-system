@@ -13,6 +13,7 @@ import {
   Calendar,
 } from 'lucide-react';
 import { useAccounting } from '../../context/AccountingContext';
+import { RevenueSkeleton } from './RevenueSkeleton';
 import { RevenueTransaction } from '../../types';
 import { formatPHP } from '../../utils/currency';
 import { formatDateDisplay, isDateInRange } from '../../utils/date';
@@ -36,6 +37,7 @@ export const RevenueView: React.FC<RevenueViewProps> = ({
     dateRange,
     voidRevenueTransaction,
     userRole,
+    isApiLoading,
   } = useAccounting();
 
   // Search & Filter state
@@ -130,6 +132,8 @@ export const RevenueView: React.FC<RevenueViewProps> = ({
     }));
     exportToCSV(exportData, `Revenue_Report_${dateRange.startDate}`);
   };
+
+  if (isApiLoading) return <RevenueSkeleton />;
 
   return (
     <div className="space-y-5">

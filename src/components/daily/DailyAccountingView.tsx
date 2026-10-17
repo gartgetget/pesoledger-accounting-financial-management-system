@@ -15,6 +15,7 @@ import {
   MapPin,
 } from 'lucide-react';
 import { useAccounting } from '../../context/AccountingContext';
+import { DailyAccountingSkeleton } from './DailyAccountingSkeleton';
 import { formatPHP, parseNumber } from '../../utils/currency';
 import {
   getTodayDateString,
@@ -37,6 +38,7 @@ export const DailyAccountingView: React.FC<{
     areas,
     addExpense,
     getSummaryForRange,
+    isApiLoading,
   } = useAccounting();
 
   // Selected Date (defaults to today 2026-09-22)
@@ -144,6 +146,8 @@ export const DailyAccountingView: React.FC<{
     const found = paymentMethods.find((p) => p.id === pmId);
     return found ? found.name : pmId;
   };
+
+  if (isApiLoading) return <DailyAccountingSkeleton />;
 
   return (
     <div className="space-y-6">

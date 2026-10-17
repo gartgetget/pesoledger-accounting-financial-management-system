@@ -16,6 +16,7 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { useAccounting } from '../../context/AccountingContext';
+import { DashboardSkeleton } from './DashboardSkeleton';
 import { formatPHP } from '../../utils/currency';
 import {
   getDateRangeFromPreset,
@@ -65,6 +66,7 @@ export const DashboardView: React.FC<{
     serviceJobs,
     vehicleExpenses,
     areas,
+    isApiLoading,
   } = useAccounting();
 
   const [transactionSearch, setTransactionSearch] = useState('');
@@ -250,6 +252,8 @@ export const DashboardView: React.FC<{
     const found = paymentMethods.find((p) => p.id === pmId);
     return found ? found.name : pmId || 'Cash';
   };
+
+  if (isApiLoading) return <DashboardSkeleton />;
 
   return (
     <div className="space-y-6">

@@ -4,8 +4,8 @@ import RevenueEntry from "./models/RevenueEntry.js";
 import VehicleExpense from "./models/VehicleExpense.js";
 import ExpenseEntry from "./models/ExpenseEntry.js";
 import PayrollEntry from "./models/PayrollEntry.js";
-import PaymentMethod from "./models/PaymentMethod.js";
 import Category from "./models/Category.js";
+import SystemState from "./models/SystemState.js";
 import { getJobRevenueLines } from "./jobRevenue.js";
 import {
   JobExpenseSource,
@@ -13,8 +13,9 @@ import {
   getJobPartsByPaymentMethod,
   getJobReferralByPaymentMethod,
 } from "./jobExpenses.js";
+import { normalizePaymentMethod } from "./paymentMethods.js";
 
-let ran = false;
+const BACKFILL_MARKER_KEY = "ledger-backfill-v1";
 
 const categoryCache = new Map<string, string>();
 
@@ -48,28 +49,47 @@ const resolveCategoryId = async (workspaceId: string, name: string): Promise<str
   return id;
 };
 
-const resolvePaymentMethod = async (workspaceId: string, value: string): Promise<string> => {
-  if (!value) return "Cash";
-  if (mongoose.isValidObjectId(value)) {
-    const pm = await PaymentMethod.findOne({ _id: value, workspaceId });
-    return pm ? value : "Cash";
-  }
-  const byName = await PaymentMethod.findOne({ workspaceId, name: value });
-  return byName ? value : "Cash";
-};
-
-const linkAlive = async (
-  model: { exists: (q: Record<string, unknown>) => Promise<unknown> },
-  id: string | undefined,
+const upsertLinkedExpense = async (
   workspaceId: string,
-): Promise<boolean> => {
-  if (!id || !mongoose.isValidObjectId(id)) return false;
-  return (await model.exists({ _id: id, workspaceId })) !== null;
+  relatedModule: string,
+  relatedId: string,
+  linked: string,
+  payload: Record<string, unknown>,
+): Promise<string> => {
+  const now = new Date();
+  const updateSet = { ...payload, updatedAt: now };
+  const setOnInsert = { workspaceId, relatedModule, relatedId, createdAt: now };
+
+  try {
+    // Prefer the row the source already points at so an existing link is
+    // refreshed in place instead of being duplicated.
+    if (mongoose.isValidObjectId(linked)) {
+      const linkedDoc = await ExpenseEntry.findOneAndUpdate(
+        { _id: linked, workspaceId },
+        { $set: updateSet },
+        { new: true },
+      );
+      if (linkedDoc) return String(linkedDoc._id);
+    }
+
+    const doc = await ExpenseEntry.findOneAndUpdate(
+      { workspaceId, relatedModule, relatedId },
+      { $set: updateSet, $setOnInsert: setOnInsert },
+      { upsert: true, new: true, setDefaultsOnInsert: true },
+    );
+    return doc ? String(doc._id) : "";
+  } catch (e: any) {
+    if (e?.code === 11000) {
+      const doc = await ExpenseEntry.findOne({ workspaceId, relatedModule, relatedId });
+      return doc ? String(doc._id) : "";
+    }
+    throw e;
+  }
 };
 
-export async function runLedgerBackfill(): Promise<void> {
-  if (ran) return;
-  ran = true;
+export async function runLedgerBackfill(force = false): Promise<void> {
+  const marker = await SystemState.findOne({ key: BACKFILL_MARKER_KEY });
+  if (marker && !force) return;
 
   let revenueCount = 0;
   let expenseCount = 0;
@@ -120,7 +140,7 @@ export async function runLedgerBackfill(): Promise<void> {
       const remainingRevenue = await RevenueEntry.find({ workspaceId, relatedId });
       const syncedRevenueIds: string[] = [];
       for (const line of revenueLines) {
-        const paymentMethod = await resolvePaymentMethod(workspaceId, line.paymentMethod);
+        const paymentMethod = await normalizePaymentMethod(workspaceId, line.paymentMethod);
         const matchIndex = remainingRevenue.findIndex(
           (revenue) => revenue.category === line.category && revenue.paymentMethod === paymentMethod,
         );
@@ -156,51 +176,69 @@ export async function runLedgerBackfill(): Promise<void> {
       };
       const expenseIds: string[] = [];
       for (const category of ["REFERRAL", "INSTALLATION MATERIALS", "PARTS / MATERIALS"]) {
-        const query = {
+        const desired = desiredExpenses[category];
+        const desiredPaymentMethods: string[] = [];
+        for (const { amount, paymentMethod } of desired) {
+          const normalizedMethod = await normalizePaymentMethod(workspaceId, String(paymentMethod || ""));
+          const now = new Date();
+          const filter = {
+            workspaceId,
+            relatedModule: "job",
+            relatedId: String(job._id),
+            category,
+            paymentMethod: normalizedMethod,
+          };
+          const update = {
+            $set: {
+              date: job.date || job.createdAt || new Date(),
+              categoryId: await resolveCategoryId(workspaceId, category),
+              category,
+              description: `${category} — Job ${job.jobNumber}${job.customerName ? ` — ${job.customerName}` : ""}`,
+              amount,
+              area: String(job.area || ""),
+              updatedAt: now,
+            },
+            $setOnInsert: {
+              workspaceId,
+              relatedModule: "job",
+              relatedId: String(job._id),
+              category,
+              paymentMethod: normalizedMethod,
+              createdBy: String(job.createdBy || ""),
+              createdAt: now,
+            },
+          };
+          let doc: any = null;
+          try {
+            const result: any = await ExpenseEntry.findOneAndUpdate(filter, update, {
+              upsert: true,
+              new: true,
+              setDefaultsOnInsert: true,
+              includeResultMetadata: true,
+            });
+            doc = result?.value;
+            if (result?.lastErrorObject?.upserted) expenseCount++;
+          } catch (e: any) {
+            if (e?.code === 11000) {
+              doc = await ExpenseEntry.findOne(filter);
+            } else {
+              throw e;
+            }
+          }
+          if (doc) expenseIds.push(String(doc._id));
+          desiredPaymentMethods.push(normalizedMethod);
+        }
+
+        const staleQuery: Record<string, unknown> = {
           workspaceId,
           relatedModule: "job",
           relatedId: String(job._id),
           category,
         };
-        const existingRows = await ExpenseEntry.find(query).sort({ createdAt: 1 });
-        const remaining = [...existingRows];
-        for (const { amount, paymentMethod } of desiredExpenses[category]) {
-          const matchIndex = remaining.findIndex(
-            (expense) => (expense.paymentMethod || "Cash") === (paymentMethod || "Cash"),
-          );
-          const existingExpense = matchIndex >= 0 ? remaining.splice(matchIndex, 1)[0] : null;
-          const payload = {
-            date: job.date || job.createdAt || new Date(),
-            categoryId: await resolveCategoryId(workspaceId, category),
-            category,
-            description: `${category} — Job ${job.jobNumber}${job.customerName ? ` — ${job.customerName}` : ""}`,
-            amount,
-            paymentMethod: await resolvePaymentMethod(workspaceId, String(paymentMethod || "")),
-            area: String(job.area || ""),
-            relatedModule: "job",
-            relatedId: String(job._id),
-          };
-          if (existingExpense) {
-            Object.assign(existingExpense, payload);
-            existingExpense.updatedAt = new Date();
-            await existingExpense.save();
-            expenseIds.push(existingExpense._id.toString());
-          } else {
-            const expense = await ExpenseEntry.create({
-              workspaceId,
-              ...payload,
-              createdBy: String(job.createdBy || ""),
-            });
-            expenseIds.push(expense._id.toString());
-            expenseCount++;
-          }
+        if (desiredPaymentMethods.length > 0) {
+          staleQuery.paymentMethod = { $nin: desiredPaymentMethods };
         }
-        if (remaining.length > 0) {
-          await ExpenseEntry.deleteMany({
-            _id: { $in: remaining.map((expense) => expense._id) },
-            workspaceId,
-          });
-        }
+        await ExpenseEntry.deleteMany(staleQuery);
       }
       job.expenseId = expenseIds[0] || "";
       await JobOrder.collection.updateOne(
@@ -225,37 +263,29 @@ export async function runLedgerBackfill(): Promise<void> {
     for (const v of vexpDocs) {
       const workspaceId = String(v.workspaceId || "");
       const linked = v.expenseId ? String(v.expenseId) : "";
-      const alive = linked ? await linkAlive(ExpenseEntry, linked, workspaceId) : false;
-      if (alive) {
-        // keep the area tag on vehicle-linked expenses in sync with the source
-        const area = String(v.area || "");
-        const mirror = await ExpenseEntry.findOne({ _id: linked, workspaceId });
-        if (mirror && String(mirror.area || "") !== area) {
-          mirror.area = area;
-          await mirror.save();
-        }
-        continue;
-      }
 
       const category = v.expenseType === "Fuel/Gas" ? "GAS" : "SASAKYAN";
-      const exp = await ExpenseEntry.create({
+      const expenseId = await upsertLinkedExpense(
         workspaceId,
-        date: v.date || v.createdAt || new Date(),
-        categoryId: await resolveCategoryId(workspaceId, category),
-        category,
-        description: v.description || `${v.expenseType} — ${v.vehicleName || ""}`.trim(),
-        amount: Number(v.amount || 0),
-        paymentMethod: await resolvePaymentMethod(workspaceId, String(v.paymentMethodId || "")),
-        area: String(v.area || ""),
-        relatedModule: "vehicle",
-        relatedId: String(v._id),
-        createdBy: String(v.createdBy || ""),
-      });
+        "vehicle",
+        String(v._id),
+        linked,
+        {
+          date: v.date || v.createdAt || new Date(),
+          categoryId: await resolveCategoryId(workspaceId, category),
+          category,
+          description: v.description || `${v.expenseType} — ${v.vehicleName || ""}`.trim(),
+          amount: Number(v.amount || 0),
+          paymentMethod: await normalizePaymentMethod(workspaceId, String(v.paymentMethodId || "")),
+          area: String(v.area || ""),
+          createdBy: String(v.createdBy || ""),
+        },
+      );
       await VehicleExpense.collection.updateOne(
         { _id: v._id },
-        { $set: { expenseId: exp._id.toString() } },
+        { $set: { expenseId } },
       );
-      expenseCount++;
+      if (!linked) expenseCount++;
     }
 
     // ---- Payroll -> SALARY expenses ----
@@ -263,7 +293,6 @@ export async function runLedgerBackfill(): Promise<void> {
     for (const p of payrollDocs) {
       const workspaceId = String(p.workspaceId || "");
       const linked = p.expenseId ? String(p.expenseId) : "";
-      const alive = linked ? await linkAlive(ExpenseEntry, linked, workspaceId) : false;
 
       const date = p.date || p.createdAt || new Date();
       const gross = Number(p.grossSalary || p.grossPay || 0);
@@ -275,34 +304,35 @@ export async function runLedgerBackfill(): Promise<void> {
       if (!p.grossSalary) legacyFill.grossSalary = gross;
       if (!p.netSalary && net) legacyFill.netSalary = net;
 
-      if (!alive) {
-        const exp = await ExpenseEntry.create({
-          workspaceId,
+      const expenseId = await upsertLinkedExpense(
+        workspaceId,
+        "salary",
+        String(p._id),
+        linked,
+        {
           date,
           categoryId: await resolveCategoryId(workspaceId, "SALARY"),
           category: "SALARY",
           description: `Payroll — ${p.employeeName || ""} (${p.period || ""})`.trim(),
           amount: gross,
-          paymentMethod: await resolvePaymentMethod(workspaceId, String(p.paymentMethodId || "")),
+          paymentMethod: await normalizePaymentMethod(workspaceId, String(p.paymentMethodId || "")),
           area: String(p.area || ""),
-          relatedModule: "salary",
-          relatedId: String(p._id),
           createdBy: String(p.createdBy || ""),
-        });
-        legacyFill.expenseId = exp._id.toString();
-        expenseCount++;
-      } else {
-        const expense = await ExpenseEntry.findOne({ _id: linked, workspaceId });
-        if (expense && typeof p.area === "string" && String(expense.area || "") !== p.area) {
-          expense.area = String(p.area || "");
-          await expense.save();
-        }
-      }
+        },
+      );
+      legacyFill.expenseId = expenseId;
+      if (!linked) expenseCount++;
 
       if (Object.keys(legacyFill).length > 0) {
         await PayrollEntry.collection.updateOne({ _id: p._id }, { $set: legacyFill });
       }
     }
+
+    await SystemState.updateOne(
+      { key: BACKFILL_MARKER_KEY },
+      { $set: { value: new Date().toISOString(), updatedAt: new Date() } },
+      { upsert: true },
+    );
 
     if (revenueCount > 0 || expenseCount > 0) {
       console.log(`Ledger backfill: +${revenueCount} revenue, +${expenseCount} expenses`);
@@ -310,7 +340,7 @@ export async function runLedgerBackfill(): Promise<void> {
       console.log("Ledger backfill: nothing to link");
     }
   } catch (e: any) {
-    ran = false;
+    // Do not mark the backfill complete; it will retry on the next startup.
     console.error("Ledger backfill failed:", e?.message || e);
   }
 }

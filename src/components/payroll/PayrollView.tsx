@@ -10,6 +10,7 @@ import {
   FileSpreadsheet,
 } from 'lucide-react';
 import { useAccounting } from '../../context/AccountingContext';
+import { PayrollSkeleton } from './PayrollSkeleton';
 import { formatPHP } from '../../utils/currency';
 import { formatDateDisplay } from '../../utils/date';
 import { exportToExcel } from '../../utils/excel';
@@ -30,6 +31,7 @@ export const PayrollView: React.FC = () => {
     deletePayroll,
     userRole,
     dateRange,
+    isApiLoading,
   } = useAccounting();
 
   const [isPayrollModalOpen, setIsPayrollModalOpen] = useState(false);
@@ -90,6 +92,8 @@ export const PayrollView: React.FC = () => {
     }));
     exportToExcel([{ sheetName: 'Payroll Records', data: exportData }], `Payroll_Ledger_${new Date().toISOString().split('T')[0]}`);
   };
+
+  if (isApiLoading) return <PayrollSkeleton />;
 
   return (
     <div className="space-y-6">

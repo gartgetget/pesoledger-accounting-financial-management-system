@@ -10,6 +10,7 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { useAccounting } from '../../context/AccountingContext';
+import { ExpensesSkeleton } from './ExpensesSkeleton';
 import { Expense } from '../../types';
 import { formatPHP } from '../../utils/currency';
 import { formatDateDisplay, isDateInRange } from '../../utils/date';
@@ -32,6 +33,7 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
     dateRange,
     voidExpense,
     userRole,
+    isApiLoading,
   } = useAccounting();
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -123,6 +125,8 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
     }));
     exportToCSV(exportData, `Expenses_Report_${dateRange.startDate}`);
   };
+
+  if (isApiLoading) return <ExpensesSkeleton />;
 
   return (
     <div className="space-y-5">

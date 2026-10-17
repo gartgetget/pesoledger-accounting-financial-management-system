@@ -9,11 +9,12 @@ import {
   Trash2,
 } from 'lucide-react';
 import { useAccounting } from '../../context/AccountingContext';
+import { CustomersSkeleton } from './CustomersSkeleton';
 import { formatPHP } from '../../utils/currency';
 import { exportToExcel } from '../../utils/excel';
 
 export const CustomersView: React.FC = () => {
-  const { customers, revenueTransactions, serviceJobs, addCustomer, deleteCustomer, userRole } = useAccounting();
+  const { customers, revenueTransactions, serviceJobs, addCustomer, deleteCustomer, userRole, isApiLoading } = useAccounting();
 
   const [searchTerm, setSearchTerm] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
@@ -72,6 +73,8 @@ export const CustomersView: React.FC = () => {
     exportToExcel([{ sheetName: 'Customers', data: exportData }], `Customer_Directory_${new Date().toISOString().split('T')[0]}`);
   };
 
+  if (isApiLoading) return <CustomersSkeleton />;
+
   return (
     <div className="space-y-6">
       {/* Top Banner */}
@@ -122,6 +125,15 @@ export const CustomersView: React.FC = () => {
       </div>
 
       {/* CUSTOMER DIRECTORY CARDS */}
+      {filteredCustomers.length === 0 ? (
+        <div className="bg-white p-10 rounded-xl border border-slate-200 shadow-xs text-center">
+          <UserCheck className="w-8 h-8 mx-auto text-slate-300" />
+          <p className="mt-3 text-sm font-medium text-slate-600">No customers yet</p>
+          <p className="mt-1 text-xs text-slate-400">
+            Add your first customer to start tracking service accounts.
+          </p>
+        </div>
+      ) : (
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {filteredCustomers.map((c) => {
           const custJobs = serviceJobs.filter((j) => j.customerId === c.id || j.customerName === c.name);
@@ -177,6 +189,7 @@ export const CustomersView: React.FC = () => {
           );
         })}
       </div>
+      )}
 
       {/* ADD CUSTOMER MODAL */}
       {showAddModal && (

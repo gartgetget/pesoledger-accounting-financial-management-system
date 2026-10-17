@@ -8,6 +8,7 @@ import {
   FileSpreadsheet,
 } from 'lucide-react';
 import { useAccounting } from '../../context/AccountingContext';
+import { VehiclesSkeleton } from './VehiclesSkeleton';
 import { formatPHP, parseNumber } from '../../utils/currency';
 import { getTodayDateString, formatDateDisplay } from '../../utils/date';
 import { exportToExcel } from '../../utils/excel';
@@ -25,6 +26,7 @@ export const VehiclesView: React.FC = () => {
     addVehicleExpensesBatch,
     deleteVehicleExpense,
     userRole,
+    isApiLoading,
   } = useAccounting();
 
   const [showAddVehicleModal, setShowAddVehicleModal] = useState(false);
@@ -68,8 +70,14 @@ export const VehiclesView: React.FC = () => {
   const handleLogVehicleExpense = async (e: React.FormEvent) => {
     e.preventDefault();
     const selectedVeh = vehicles.find((v) => v.id === logVehId);
-    if (!selectedVeh || logLines.some((line) => parseNumber(line.amount) <= 0 || !line.paymentMethodId)) {
-      alert('Please choose an expense type, positive amount, and payment method for both lines.');
+    const hasInvalidLine = logLines.some((line) => {
+      const amt = parseNumber(line.amount);
+      if (!line.paymentMethodId) return true;
+      return line.expenseType === 'Fuel/Gas' ? amt < 0 : amt <= 0;
+    });
+    const hasPositiveAmount = logLines.some((line) => parseNumber(line.amount) > 0);
+    if (!selectedVeh || hasInvalidLine || !hasPositiveAmount) {
+      alert('Please choose an expense type, valid amount, and payment method for both lines. Fuel/Gas may be 0, but at least one line must be greater than 0.');
       return;
     }
 
@@ -141,6 +149,8 @@ export const VehiclesView: React.FC = () => {
     }));
     exportToExcel([{ sheetName: 'Vehicle Expenses', data: exportData }], `Vehicle_Expenses_${new Date().toISOString().split('T')[0]}`);
   };
+
+  if (isApiLoading) return <VehiclesSkeleton />;
 
   return (
     <div className="space-y-6">
@@ -431,7 +441,7 @@ export const VehiclesView: React.FC = () => {
                         </label>
                         <input
                           type="number"
-                          min="0.01"
+                          min={line.expenseType === 'Fuel/Gas' ? '0' : '0.01'}
                           step="any"
                           value={line.amount}
                           onChange={(e) => setLogLines((current) => current.map((item, itemIndex) =>

@@ -1,7 +1,9 @@
 import { createRouter } from "../middleware/createRouter.js";
+import mongoose from "mongoose";
 import PayrollEntry from "../models/PayrollEntry.js";
 import ExpenseEntry from "../models/ExpenseEntry.js";
 import Category from "../models/Category.js";
+import { normalizePaymentMethod } from "../paymentMethods.js";
 import auth from "../middleware/auth.js";
 
 const router = createRouter();
@@ -25,30 +27,49 @@ const findCategoryIdByName = async (workspaceId: string, name: string, type: str
 const syncPayrollExpense = async (workspaceId: string, entry: PayrollEntryDoc, createdBy: string) => {
   const categoryId = await findCategoryIdByName(workspaceId, "SALARY", "expense");
   const amount = entry.grossSalary || entry.grossPay || 0;
+  const relatedId = entry._id.toString();
+  const now = new Date();
   const payload = {
     date: entry.date,
     categoryId,
     category: "SALARY",
     description: `Payroll — ${entry.employeeName} (${entry.period})`,
     amount,
-    paymentMethod: entry.paymentMethodId || "Cash",
+    paymentMethod: await normalizePaymentMethod(workspaceId, entry.paymentMethodId),
     area: entry.area || "",
     relatedModule: "salary",
-    relatedId: entry._id.toString(),
+    relatedId,
   };
 
-  if (entry.expenseId) {
-    const exp = await ExpenseEntry.findOne({ _id: entry.expenseId, workspaceId });
-    if (exp) {
-      Object.assign(exp, payload);
-      exp.updatedAt = new Date();
-      await exp.save();
-      return exp._id.toString();
-    }
+  // Refresh the row the entry already points at, when it still exists.
+  if (entry.expenseId && mongoose.isValidObjectId(entry.expenseId)) {
+    const existing = await ExpenseEntry.findOneAndUpdate(
+      { _id: entry.expenseId, workspaceId },
+      { $set: { ...payload, updatedAt: now } },
+      { new: true },
+    );
+    if (existing) return existing._id.toString();
   }
 
-  const exp = await ExpenseEntry.create({ workspaceId, ...payload, createdBy });
-  return exp._id.toString();
+  // Otherwise upsert by source id so a dangling expenseId self-heals instead
+  // of inserting a duplicate that the unique index would reject.
+  try {
+    const exp = await ExpenseEntry.findOneAndUpdate(
+      { workspaceId, relatedModule: "salary", relatedId },
+      {
+        $set: { ...payload, updatedAt: now },
+        $setOnInsert: { workspaceId, createdBy, createdAt: now },
+      },
+      { upsert: true, new: true, setDefaultsOnInsert: true },
+    );
+    return exp ? exp._id.toString() : "";
+  } catch (e: any) {
+    if (e?.code === 11000) {
+      const exp = await ExpenseEntry.findOne({ workspaceId, relatedModule: "salary", relatedId });
+      return exp ? exp._id.toString() : "";
+    }
+    throw e;
+  }
 };
 
 type PayrollEntryDoc = InstanceType<typeof PayrollEntry>;

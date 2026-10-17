@@ -5,6 +5,7 @@ import Employee from "../models/Employee.js";
 import PaymentMethod from "../models/PaymentMethod.js";
 import ExpenseEntry from "../models/ExpenseEntry.js";
 import Category from "../models/Category.js";
+import { normalizePaymentMethod } from "../paymentMethods.js";
 import auth from "../middleware/auth.js";
 
 const router = createRouter();
@@ -157,7 +158,7 @@ router.post("/:workspaceId/vehicle-expenses/batch", ensureWorkspaceAccess, async
         category,
         description: `${line.expenseType} — ${description || vehicleExpense.vehicleName}`,
         amount: line.amount,
-        paymentMethod: line.paymentMethodId,
+        paymentMethod: await normalizePaymentMethod(workspaceId, line.paymentMethodId),
         area: area || "",
         relatedModule: "vehicle",
         relatedId: vehicleExpense._id.toString(),
@@ -216,7 +217,7 @@ router.post("/:workspaceId/vehicle-expenses", ensureWorkspaceAccess, async (req,
       category,
       description: description || `${expenseType} — ${expenseEntry.vehicleName}`,
       amount: Number(amount),
-      paymentMethod: paymentMethodId || "Cash",
+      paymentMethod: await normalizePaymentMethod(workspaceId, paymentMethodId),
       area: area || "",
       relatedModule: "vehicle",
       relatedId: expenseEntry._id.toString(),

@@ -10,6 +10,7 @@ import {
   getJobPartsByPaymentMethod,
   getJobReferralByPaymentMethod,
 } from "../jobExpenses.js";
+import { normalizePaymentMethod } from "../paymentMethods.js";
 import auth from "../middleware/auth.js";
 
 const router = createRouter();
@@ -191,6 +192,61 @@ const syncJobRevenue = async (workspaceId: string, job: JobOrderDoc, createdBy: 
   job.revenueId = syncedIds[0] || "";
 };
 
+const upsertJobExpense = async (
+  workspaceId: string,
+  category: string,
+  relatedId: string,
+  line: { paymentMethod: string; amount: number },
+  job: JobOrderDoc,
+  createdBy: string,
+): Promise<string> => {
+  const categoryId = await ensureJobExpenseCategory(workspaceId, category);
+  const now = new Date();
+  const filter = {
+    workspaceId,
+    relatedModule: "job",
+    relatedId,
+    category,
+    paymentMethod: line.paymentMethod,
+  };
+  const update = {
+    $set: {
+      date: job.date,
+      categoryId,
+      category,
+      description: `${category} — Job ${job.jobNumber}${job.customerName ? ` — ${job.customerName}` : ""}`,
+      amount: line.amount,
+      area: job.area || "",
+      updatedAt: now,
+    },
+    $setOnInsert: {
+      workspaceId,
+      relatedModule: "job",
+      relatedId,
+      category,
+      paymentMethod: line.paymentMethod,
+      createdBy,
+      createdAt: now,
+    },
+  };
+
+  try {
+    const doc = await ExpenseEntry.findOneAndUpdate(filter, update, {
+      upsert: true,
+      new: true,
+      setDefaultsOnInsert: true,
+    });
+    return doc ? String(doc._id) : "";
+  } catch (e: any) {
+    // A concurrent sync may have inserted the same line first; fall back to it.
+    if (e?.code === 11000) {
+      const doc = await ExpenseEntry.findOne(filter).select("_id");
+      return doc ? String(doc._id) : "";
+    }
+    throw e;
+  }
+};
+
 const syncJobExpenses = async (workspaceId: string, job: JobOrderDoc, createdBy: string) => {
   const relatedId = job._id.toString();
   const shouldPost = job.status !== "cancelled";
@@ -202,44 +258,33 @@ const syncJobExpenses = async (workspaceId: string, job: JobOrderDoc, createdBy:
   const linkedExpenses: string[] = [];
 
   for (const category of ["REFERRAL", "INSTALLATION MATERIALS", "PARTS / MATERIALS"]) {
-    const query = { workspaceId, relatedModule: "job", relatedId, category };
-    const existingExpenses = await ExpenseEntry.find(query).sort({ createdAt: 1 });
     const desired = desiredByCategory[category];
-    const remaining = [...existingExpenses];
+    const desiredPaymentMethods: string[] = [];
 
-    for (const { amount, paymentMethod } of desired) {
-      const matchIndex = remaining.findIndex(
-        (exp) => (exp.paymentMethod || "Cash") === (paymentMethod || "Cash"),
-      );
-      const existing = matchIndex >= 0 ? remaining.splice(matchIndex, 1)[0] : null;
-      const payload = {
-        date: job.date,
-        categoryId: await ensureJobExpenseCategory(workspaceId, category),
-        category,
-        description: `${category} — Job ${job.jobNumber}${job.customerName ? ` — ${job.customerName}` : ""}`,
-        amount,
-        paymentMethod,
-        area: job.area || "",
-        relatedModule: "job",
-        relatedId,
-        updatedAt: new Date(),
-      };
-      if (existing) {
-        Object.assign(existing, payload);
-        await existing.save();
-        linkedExpenses.push(existing._id.toString());
-      } else {
-        const expense = await ExpenseEntry.create({ workspaceId, ...payload, createdBy });
-        linkedExpenses.push(expense._id.toString());
-      }
-    }
-
-    if (remaining.length > 0) {
-      await ExpenseEntry.deleteMany({
-        _id: { $in: remaining.map((expense) => expense._id) },
+    for (const line of desired) {
+      const paymentMethod = await normalizePaymentMethod(workspaceId, line.paymentMethod);
+      const id = await upsertJobExpense(
         workspaceId,
-      });
+        category,
+        relatedId,
+        { amount: line.amount, paymentMethod },
+        job,
+        createdBy,
+      );
+      if (id) linkedExpenses.push(id);
+      desiredPaymentMethods.push(paymentMethod);
     }
+
+    const staleQuery: Record<string, unknown> = {
+      workspaceId,
+      relatedModule: "job",
+      relatedId,
+      category,
+    };
+    if (desiredPaymentMethods.length > 0) {
+      staleQuery.paymentMethod = { $nin: desiredPaymentMethods };
+    }
+    await ExpenseEntry.deleteMany(staleQuery);
   }
 
   job.expenseId = linkedExpenses[0] || "";
@@ -267,26 +312,8 @@ const reconcileWorkspaceJobLedger = async (workspaceId: string, createdBy: strin
     matches.push(revenue);
     revenueByJob.set(revenue.relatedId, matches);
   }
-  const existingExpenses = await ExpenseEntry.find({
-    workspaceId,
-    relatedModule: "job",
-    category: { $in: ["REFERRAL", "INSTALLATION MATERIALS", "PARTS / MATERIALS"] },
-  }).lean();
-  const expensesByJobCategory = new Map<string, typeof existingExpenses>();
-  for (const expense of existingExpenses) {
-    const key = `${expense.relatedId}:${expense.category}`;
-    const matches = expensesByJobCategory.get(key) || [];
-    matches.push(expense);
-    expensesByJobCategory.set(key, matches);
-  }
-
-  const categoryIds = new Map<string, string>();
-  for (const name of ["REFERRAL", "INSTALLATION MATERIALS", "PARTS / MATERIALS"]) {
-    categoryIds.set(name, await ensureJobExpenseCategory(workspaceId, name));
-  }
 
   const revenueOperations: Parameters<typeof RevenueEntry.bulkWrite>[0] = [];
-  const operations: Parameters<typeof ExpenseEntry.bulkWrite>[0] = [];
   const jobOperations: Parameters<typeof JobOrder.bulkWrite>[0] = [];
   let referralTotal = 0;
   let installationMaterialsTotal = 0;
@@ -361,68 +388,27 @@ const reconcileWorkspaceJobLedger = async (workspaceId: string, createdBy: strin
       revenueOperations.push({ deleteMany: { filter: revenueQuery } });
     }
 
+    const shouldPostExpenses = job.status !== "cancelled";
     const amounts: Record<string, Array<{ amount: number; paymentMethod: string }>> = {
-      REFERRAL: getJobReferralByPaymentMethod(job),
-      "INSTALLATION MATERIALS": getJobInstallationMaterialsByPaymentMethod(job),
-      "PARTS / MATERIALS": getJobPartsByPaymentMethod(job),
+      REFERRAL: shouldPostExpenses ? getJobReferralByPaymentMethod(job) : [],
+      "INSTALLATION MATERIALS": shouldPostExpenses ? getJobInstallationMaterialsByPaymentMethod(job) : [],
+      "PARTS / MATERIALS": shouldPostExpenses ? getJobPartsByPaymentMethod(job) : [],
     };
 
     for (const [category, desired] of Object.entries(amounts)) {
-      const query = { workspaceId, relatedModule: "job", relatedId, category };
-      const key = `${relatedId}:${category}`;
-      const existing = expensesByJobCategory.get(key) || [];
-      if (job.status === "cancelled" || desired.length === 0) {
-        if (existing.length > 0) operations.push({ deleteMany: { filter: query } });
-        continue;
-      }
-
-      const remaining = [...existing];
       for (const line of desired) {
-        const matchIndex = remaining.findIndex((expense) => expense.paymentMethod === line.paymentMethod);
-        const legacyIndex = matchIndex < 0 && desired.length === 1 && remaining.length === 1 ? 0 : matchIndex;
-        const matched = legacyIndex >= 0 ? remaining.splice(legacyIndex, 1)[0] : null;
         if (category === "REFERRAL") referralTotal += line.amount;
-        if (category === "INSTALLATION MATERIALS") installationMaterialsTotal += line.amount;
-        if (category === "PARTS / MATERIALS") partsMaterialsTotal += line.amount;
-        operations.push({
-          updateOne: {
-            filter: matched
-              ? { _id: matched._id, workspaceId }
-              : { ...query, paymentMethod: line.paymentMethod },
-            update: {
-              $set: {
-                date: job.date,
-                categoryId: categoryIds.get(category) || "",
-                category,
-                description: `${category} — Job ${job.jobNumber}${job.customerName ? ` — ${job.customerName}` : ""}`,
-                amount: line.amount,
-                paymentMethod: line.paymentMethod,
-                area: job.area || "",
-                relatedModule: "job",
-                relatedId,
-                updatedAt: now,
-              },
-              $setOnInsert: { workspaceId, createdBy: job.createdBy || createdBy, createdAt: now },
-            },
-            upsert: true,
-          },
-        });
-      }
-      if (remaining.length > 0) {
-        operations.push({
-          deleteMany: {
-            filter: { ...query, _id: { $in: remaining.map((expense) => expense._id) } },
-          },
-        });
+        else if (category === "INSTALLATION MATERIALS") installationMaterialsTotal += line.amount;
+        else partsMaterialsTotal += line.amount;
       }
     }
+
+    // Idempotent, normalized re-post of this job's expense lines.
+    await syncJobExpenses(workspaceId, job as unknown as JobOrderDoc, job.createdBy || createdBy);
   }
 
   if (revenueOperations.length > 0) {
     await RevenueEntry.bulkWrite(revenueOperations, { ordered: false });
-  }
-  if (operations.length > 0) {
-    await ExpenseEntry.bulkWrite(operations, { ordered: false });
   }
   if (jobOperations.length > 0) {
     await JobOrder.bulkWrite(jobOperations, { ordered: false });

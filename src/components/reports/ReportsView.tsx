@@ -11,6 +11,7 @@ import {
   Building2,
 } from 'lucide-react';
 import { useAccounting } from '../../context/AccountingContext';
+import { ReportsSkeleton } from './ReportsSkeleton';
 import { formatPHP } from '../../utils/currency';
 import { formatDateDisplay, isDateInRange } from '../../utils/date';
 import { exportToExcel, exportToCSV } from '../../utils/excel';
@@ -47,6 +48,7 @@ export const ReportsView: React.FC<{
     expenses,
     paymentMethods,
     areas,
+    isApiLoading,
   } = useAccounting();
 
   const [activeReportTab, setActiveReportTab] = useState<'pnl' | 'categories' | 'payment_methods' | 'areas'>(initialTab);
@@ -177,6 +179,8 @@ export const ReportsView: React.FC<{
       `Profit_Loss_Statement_${dateRange.startDate}_to_${dateRange.endDate}`
     );
   };
+
+  if (isApiLoading) return <ReportsSkeleton />;
 
   return (
     <div className="space-y-6">

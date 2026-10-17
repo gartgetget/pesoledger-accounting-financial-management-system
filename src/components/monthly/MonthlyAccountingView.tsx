@@ -8,13 +8,14 @@ import {
   Award,
 } from 'lucide-react';
 import { useAccounting } from '../../context/AccountingContext';
+import { MonthlyAccountingSkeleton } from './MonthlyAccountingSkeleton';
 import { formatPHP } from '../../utils/currency';
 import { getMonthName, getTodayDateString, formatDateDisplay, formatDateString, isDateInRange } from '../../utils/date';
 import { CategoryHorizontalBars, PaymentMethodDistribution } from '../dashboard/Charts';
 import { exportToExcel } from '../../utils/excel';
 
 export const MonthlyAccountingView: React.FC = () => {
-  const { revenueTransactions, expenses, getSummaryForRange } = useAccounting();
+  const { revenueTransactions, expenses, getSummaryForRange, isApiLoading } = useAccounting();
 
   const today = getTodayDateString().split('-').map(Number);
   const [selectedYear, setSelectedYear] = useState(today[0]);
@@ -78,6 +79,8 @@ export const MonthlyAccountingView: React.FC = () => {
     }));
     exportToExcel([{ sheetName: 'Monthly Daily Breakdown', data: exportData }], `Monthly_Accounting_${getMonthName(selectedMonth)}_${selectedYear}`);
   };
+
+  if (isApiLoading) return <MonthlyAccountingSkeleton />;
 
   return (
     <div className="space-y-6">

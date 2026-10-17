@@ -7,13 +7,14 @@ import {
   FileSpreadsheet,
 } from 'lucide-react';
 import { useAccounting } from '../../context/AccountingContext';
+import { YearlyAccountingSkeleton } from './YearlyAccountingSkeleton';
 import { formatPHP } from '../../utils/currency';
 import { getTodayDateString } from '../../utils/date';
 import { RevenueExpensesBarChart } from '../dashboard/Charts';
 import { exportToExcel } from '../../utils/excel';
 
 export const YearlyAccountingView: React.FC = () => {
-  const { getYearlyMatrix } = useAccounting();
+  const { getYearlyMatrix, isApiLoading } = useAccounting();
 
   const currentYear = Number(getTodayDateString().slice(0, 4));
   const [selectedYear, setSelectedYear] = useState(currentYear);
@@ -50,6 +51,8 @@ export const YearlyAccountingView: React.FC = () => {
     });
     exportToExcel([{ sheetName: '12-Month Matrix', data: exportData }], `Annual_Matrix_${selectedYear}`);
   };
+
+  if (isApiLoading) return <YearlyAccountingSkeleton />;
 
   return (
     <div className="space-y-6">
@@ -148,6 +151,12 @@ export const YearlyAccountingView: React.FC = () => {
           </h2>
           <span className="text-[11px] text-slate-500 font-mono">PHP (₱)</span>
         </div>
+
+        {totalYearRevenue === 0 && totalYearExpenses === 0 && (
+          <div className="px-4 py-3 text-xs text-slate-500 border-b border-slate-100 bg-slate-50/60">
+            No transactions recorded for {selectedYear}. The matrix below shows zero balances.
+          </div>
+        )}
 
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs font-mono">

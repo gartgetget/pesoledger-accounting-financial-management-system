@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import dotenv from "dotenv";
+import { runStartupMaintenance } from "./maintenance.js";
 import { runLedgerBackfill } from "./ledgerBackfill.js";
 
 dotenv.config();
@@ -38,9 +39,12 @@ async function connectDB(): Promise<void> {
       err.status = 500;
       throw err;
     }
-    cached.promise = mongoose.connect(uri).then((m) => {
+    cached.promise = mongoose.connect(uri).then(async (m) => {
       cached.conn = m;
-      void runLedgerBackfill().catch((e: any) => {
+      // Clean up legacy duplicates and enforce the idempotency index before
+      // anything can post new ledger rows. Then backfill legacy sources once.
+      await runStartupMaintenance();
+      await runLedgerBackfill().catch((e: any) => {
         console.error("Ledger backfill failed:", e?.message || e);
       });
       return m;

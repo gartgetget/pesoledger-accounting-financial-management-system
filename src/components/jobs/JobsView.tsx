@@ -12,6 +12,7 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import { useAccounting } from '../../context/AccountingContext';
+import { JobsSkeleton } from './JobsSkeleton';
 import { ServiceJob } from '../../types';
 import { formatPHP } from '../../utils/currency';
 import { formatDateDisplay } from '../../utils/date';
@@ -26,7 +27,7 @@ interface JobsViewProps {
 }
 
 export const JobsView: React.FC<JobsViewProps> = ({ onOpenJobModal, onEditJob }) => {
-  const { serviceJobs, expenses, deleteServiceJob, userRole, dateRange } = useAccounting();
+  const { serviceJobs, expenses, deleteServiceJob, userRole, dateRange, isApiLoading } = useAccounting();
 
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
@@ -94,6 +95,8 @@ export const JobsView: React.FC<JobsViewProps> = ({ onOpenJobModal, onEditJob })
     exportToExcel([{ sheetName: 'Service Orders', data: exportData }], `Service_Jobs_${new Date().toISOString().split('T')[0]}`);
   };
 
+  if (isApiLoading) return <JobsSkeleton />;
+
   return (
     <div className="space-y-5">
       {/* Top Banner */}
@@ -128,57 +131,65 @@ export const JobsView: React.FC<JobsViewProps> = ({ onOpenJobModal, onEditJob })
       </div>
 
       {/* FILTERS */}
-      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs flex items-center gap-3">
-        <div className="relative">
-          <Search className="w-4 h-4 absolute left-2 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="    Search job #, customer, tech..."
-            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent"
-style={{ maxWidth: '700px' }}
-          />
-        </div>
+      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs space-y-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-6 gap-2.5">
+          <div className="md:col-span-4 relative">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Search job #, customer, tech..."
+              className="w-full text-xs pl-9 pr-3 py-2 border border-slate-200 rounded-lg focus:outline-hidden focus:ring-1 focus:ring-rose-500"
+            />
+          </div>
 
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent"
-style={{ maxWidth: '700px' }}
+          <div>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="w-full text-xs px-3 py-2 border border-slate-200 rounded-lg focus:outline-hidden bg-white text-slate-700"
             >
               <option value="ALL">All Payment Statuses</option>
-          <option value="Paid">Paid</option>
-          <option value="Partially Paid">Partially Paid</option>
-          <option value="Unpaid">Unpaid</option>
-        </select>
+              <option value="Paid">Paid</option>
+              <option value="Partially Paid">Partially Paid</option>
+              <option value="Unpaid">Unpaid</option>
+            </select>
+          </div>
 
-        <select
-          value={categoryFilter}
-          onChange={(e) => setCategoryFilter(e.target.value)}
-          className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent"
-style={{ maxWidth: '700px' }}
+          <div>
+            <select
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value)}
+              className="w-full text-xs px-3 py-2 border border-slate-200 rounded-lg focus:outline-hidden bg-white text-slate-700"
             >
               <option value="ALL">All Categories</option>
-          {categoryOptions.length === 0 ? (
-            <option disabled>
-              No categories yet
-            </option>
-          ) : (
-            categoryOptions.map((category) => (
-              <option key={category} value={category}>{category}</option>
-            ))
-          )}
-        </select>
-      </div>
+              {categoryOptions.length === 0 ? (
+                <option disabled>
+                  No categories yet
+                </option>
+              ) : (
+                categoryOptions.map((category) => (
+                  <option key={category} value={category}>{category}</option>
+                ))
+              )}
+            </select>
+          </div>
+        </div>
 
-        <button
-          onClick={handleExport}
-          className="flex items-center gap-1.5 px-3 py-2 border border-slate-200 hover:border-slate-300 text-slate-700 rounded-lg text-xs font-medium cursor-pointer"
-        >
-          <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
-          <span>Export Jobs</span>
-        </button>
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100">
+          <span className="text-xs text-slate-500">
+            Showing {filteredJobs.length} of {serviceJobs.length} job orders
+          </span>
+          <button
+            onClick={handleExport}
+            className="flex items-center gap-1.5 px-3 py-2 border border-slate-200 hover:border-slate-300 text-slate-700 rounded-lg text-xs font-medium cursor-pointer"
+          >
+            <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+            <span>Export Jobs</span>
+          </button>
+        </div>
+      </div>
       {/* JOBS TABLE */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
         <div className="overflow-x-auto">

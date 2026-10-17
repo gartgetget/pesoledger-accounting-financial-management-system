@@ -115,7 +115,7 @@ export const getDateRangeFromPreset = (
     }
     case 'all':
     default:
-      return { startDate: '2020-01-01', endDate: '2030-12-31' };
+      return { startDate: '2026-01-01', endDate: '2050-12-31' };
   }
 };
 

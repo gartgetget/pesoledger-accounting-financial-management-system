@@ -35,4 +35,17 @@ const expenseEntrySchema = new mongoose.Schema<IExpenseEntry>(
   { versionKey: false }
 );
 
+// Ensures a single ledger row per source line for auto-posted collections.
+// Created explicitly in backend/maintenance.ts after duplicate cleanup so the
+// build never fails on legacy data that still contains duplicates.
+expenseEntrySchema.set("autoIndex", false);
+expenseEntrySchema.index(
+  { workspaceId: 1, relatedModule: 1, relatedId: 1, category: 1, paymentMethod: 1 },
+  {
+    name: "uniq_linked_expense",
+    unique: true,
+    partialFilterExpression: { relatedModule: { $in: ["job", "vehicle", "salary"] } },
+  },
+);
+
 export default mongoose.model<IExpenseEntry>("ExpenseEntry", expenseEntrySchema);

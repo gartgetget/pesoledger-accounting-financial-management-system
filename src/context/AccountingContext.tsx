@@ -321,7 +321,7 @@ export const AccountingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const [userRole, setUserRole] = useState<UserRole>('admin');
   const [dateFilterPreset, setDateFilterPreset] = useState<DateRangePreset>('this_month');
   const [customRange, setCustomRange] = useState<DateFilterRange | null>(null);
-  const [isLoadingData, setIsLoadingData] = useState(false);
+  const [isLoadingData, setIsLoadingData] = useState(true);
 
   const [revenueTransactions, setRevenueTransactions] = useState<RevenueTransaction[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
@@ -354,7 +354,10 @@ export const AccountingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   }, [userRole]);
 
   useEffect(() => {
-    if (!activeWorkspaceId || !authIsAuthenticated) return;
+    if (!activeWorkspaceId || !authIsAuthenticated) {
+      setIsLoadingData(false);
+      return;
+    }
     const fetchAllData = async () => {
       setIsLoadingData(true);
       try {
