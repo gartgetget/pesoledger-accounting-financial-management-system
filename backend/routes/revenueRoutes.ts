@@ -2,6 +2,7 @@ import { createRouter } from "../middleware/createRouter.js";
 import RevenueEntry from "../models/RevenueEntry.js";
 import JobOrder from "../models/JobOrder.js";
 import { getJobRevenueLines } from "../jobRevenue.js";
+import { getJobExpenseTotals } from "../jobExpenses.js";
 import auth from "../middleware/auth.js";
 
 const router = createRouter();
@@ -101,7 +102,10 @@ router.delete("/:workspaceId/revenue/:id", ensureWorkspaceAccess, async (req, re
     const job = await JobOrder.findOne({ _id: entry.relatedId, workspaceId });
     if (job) {
       job.amountPaid = 0;
-      job.paymentStatus = "Unpaid";
+      const totals = getJobExpenseTotals(job);
+      const jobExpenseTotal = totals.parts + totals.installationMaterials + totals.referral;
+      const netCollection = job.amountPaid - jobExpenseTotal;
+      job.paymentStatus = job.status !== "cancelled" && netCollection <= 0 ? "Paid" : "Unpaid";
       job.revenueId = "";
       job.customers = (job.customers || []).map((c: any) => ({ ...c, amountCollected: 0 }));
       job.updatedAt = new Date();

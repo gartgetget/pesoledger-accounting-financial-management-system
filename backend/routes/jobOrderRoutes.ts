@@ -213,7 +213,6 @@ const upsertJobExpense = async (
     $set: {
       date: job.date,
       categoryId,
-      category,
       description: `${category} — Job ${job.jobNumber}${job.customerName ? ` — ${job.customerName}` : ""}`,
       amount: line.amount,
       area: job.area || "",

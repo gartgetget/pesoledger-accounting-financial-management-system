@@ -5,12 +5,6 @@ import { formatPHP, parseNumber } from '../../utils/currency';
 import { getTodayDateString } from '../../utils/date';
 import { PaymentStatus, JobStatus, ServiceJob, JobCustomer, JobPartLine } from '../../types';
 
-interface JobModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  editItem?: ServiceJob | null;
-}
-
 const nextJobNumber = (jobs: ServiceJob[]): string => {
   const year = new Date().getFullYear();
   const prefix = `JOB-${year}-`;
@@ -21,6 +15,12 @@ const nextJobNumber = (jobs: ServiceJob[]): string => {
     .reduce((a, b) => (Number.isNaN(b) ? a : Math.max(a, b)), 0);
   return `${prefix}${String(max + 1).padStart(3, '0')}`;
 };
+
+interface JobModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  editItem?: ServiceJob | null;
+}
 
 const getCustomerTotalCollection = (customer: JobCustomer): number => {
   const partsTotal = customer.parts.reduce((sum, part) => sum + (Number(part.price) || 0), 0);
@@ -51,6 +51,7 @@ export const JobModal: React.FC<JobModalProps> = ({
   const [jobNumber, setJobNumber] = useState(
     editItem ? editItem.jobNumber : nextJobNumber(serviceJobs)
   );
+
   const [jobCustomers, setJobCustomers] = useState<JobCustomer[]>(() => {
     if (editItem?.customers && editItem.customers.length > 0) {
       return editItem.customers.map((customer) => ({
@@ -208,7 +209,7 @@ export const JobModal: React.FC<JobModalProps> = ({
   const finalTotal = Math.max(0, subtotal - computedDiscount);
   const actualPaid = collectionAmount;
   const paymentStatus: PaymentStatus =
-    actualPaid >= finalTotal ? 'Paid' : actualPaid > 0 ? 'Partially Paid' : 'Unpaid';
+    actualPaid >= finalTotal || totalCollected <= 0 ? 'Paid' : actualPaid > 0 ? 'Partially Paid' : 'Unpaid';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

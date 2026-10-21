@@ -240,8 +240,19 @@ function mapBackendJob(order: any): ServiceJob {
   const calculatedDiscount = Math.min(subtotal, Math.max(0, requestedDiscount));
   const total = Math.max(0, subtotal - calculatedDiscount);
   const amountPaid = mappedCustomers.length > 0 ? customerBill : Number(order.amountPaid) || 0;
+  const jobDeductions = mappedCustomers.length > 0
+    ? mappedCustomers.reduce(
+      (sum, customer) =>
+        sum + customer.installationMaterialsPrice + customer.referralAmount
+        + customer.parts.reduce((partSum, part) => partSum + part.price, 0),
+      0,
+    )
+    : Math.max(0, Number(order.jobInstallationMaterialsExpense) || 0)
+      + Math.max(0, Number(order.jobPartsExpense) || 0)
+      + Math.max(0, Number(order.jobReferralExpense) || 0);
+  const netCollection = amountPaid - jobDeductions;
   const paymentStatus: ServiceJob['paymentStatus'] =
-    total > 0 && amountPaid >= total
+    netCollection <= 0 || (total > 0 && amountPaid >= total)
       ? 'Paid'
       : amountPaid > 0
         ? 'Partially Paid'
