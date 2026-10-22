@@ -47,6 +47,23 @@ export const formatDateDisplay = (dateStr: string): string => {
   }
 };
 
+export const formatDateDisplayWithWeekday = (dateStr: string): string => {
+  if (!dateStr) return '';
+  try {
+    const [year, month, day] = dateStr.split('-');
+    if (!year || !month || !day) return dateStr;
+    const date = new Date(Number(year), Number(month) - 1, Number(day));
+    return date.toLocaleDateString('en-US', {
+      weekday: 'short',
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
+  } catch {
+    return dateStr;
+  }
+};
+
 export const getMonthName = (monthIndex: number): string => {
   const months = [
     'January', 'February', 'March', 'April', 'May', 'June',
@@ -117,6 +134,22 @@ export const getDateRangeFromPreset = (
     default:
       return { startDate: '2026-01-01', endDate: '2050-12-31' };
   }
+};
+
+export const addDaysToDateString = (dateStr: string, days: number): string => {
+  const d = parseDateString(String(dateStr).slice(0, 10));
+  d.setDate(d.getDate() + days);
+  return formatDateString(d);
+};
+
+export const getWeekStartForDate = (dateStr: string): string => {
+  const d = parseDateString(String(dateStr).slice(0, 10));
+  const day = d.getDay(); // 0 is Sunday ... 4 is Thursday
+  // Pay week runs Thursday -> Wednesday
+  const offset = (day - 4 + 7) % 7;
+  const thursday = new Date(d);
+  thursday.setDate(d.getDate() - offset);
+  return formatDateString(thursday);
 };
 
 export const isDateInRange = (dateStr: string, range: DateFilterRange): boolean => {

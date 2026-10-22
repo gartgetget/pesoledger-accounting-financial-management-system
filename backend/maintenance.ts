@@ -5,7 +5,7 @@ import { normalizePaymentMethod } from "./paymentMethods.js";
 const LINKED_MODULES = ["job", "vehicle", "salary"];
 const SOURCE_MODULES = ["vehicle", "salary"];
 
-const DEDUPE_MARKER_KEY = "expense-dedupe-v1";
+const DEDUPE_MARKER_V2_KEY = "expense-dedupe-v2";
 const UNIQUE_INDEX = { name: "uniq_linked_expense" };
 
 /**
@@ -118,49 +118,94 @@ export const ensureExpenseIndexes = async (): Promise<void> => {
 };
 
 /**
- * Run the one-time duplicate cleanup + payment-method normalization exactly
- * once (tracked via SystemState). The unique index is permanent, so once the
- * cleanup has run duplicates cannot reappear through normal writes.
+ * Verify the partial unique index actually exists on the collection. The index
+ * can fail to materialize (e.g. createIndex rejected due to pre-existing
+ * duplicates) while older code still reported success, so this runs after.
  */
-export const runExpenseDedupeOnce = async (): Promise<void> => {
-  const marker = await SystemState.findOne({ key: DEDUPE_MARKER_KEY });
-  if (marker) return;
+export const verifyExpenseUniqueIndex = async (): Promise<boolean> => {
+  try {
+    const indexes = await ExpenseEntry.collection.indexes();
+    const found = indexes.some((idx: Record<string, unknown>) => idx.name === UNIQUE_INDEX.name);
+    if (!found) {
+      console.error(
+        `Expense maintenance: REQUIRED INDEX ${UNIQUE_INDEX.name} IS MISSING — duplicate ledger rows cannot be blocked until the dedupe succeeds and the index is created.`,
+      );
+    }
+    return found;
+  } catch (e: any) {
+    console.error("Expense maintenance: index verification failed:", e?.message || e);
+    return false;
+  }
+};
 
-  const exactRemoved = await dedupeLinkedExpenses();
-  const sourceRemoved = await dedupeSourceLinkedExpenses();
-  const normalized = await normalizeLinkedPaymentMethods();
+/**
+ * Run one full idempotent maintenance cycle:
+ * 1. Collapse 1:1 source-linked rows (salary/vehicle) that share relatedId.
+ * 2. Normalize legacy payment-method values.
+ * 3. Remove remaining duplicate rows that share the exact composite key.
+ * 4. Ensure the partial unique index exists, then verify it.
+ * Safe to run on every startup or on demand.
+ */
+export const runMaintenanceCycle = async (): Promise<{
+  sourceRemoved: number;
+  normalized: number;
+  exactRemoved: number;
+  indexPresent: boolean;
+}> => {
+  let sourceRemoved = 0;
+  let normalized = 0;
+  let exactRemoved = 0;
 
-  await SystemState.updateOne(
-    { key: DEDUPE_MARKER_KEY },
-    { $set: { value: new Date().toISOString(), updatedAt: new Date() } },
-    { upsert: true },
-  );
+  try {
+    sourceRemoved = await dedupeSourceLinkedExpenses();
+    normalized = await normalizeLinkedPaymentMethods();
+    exactRemoved = await dedupeLinkedExpenses();
+  } catch (e: any) {
+    console.error("Expense dedupe failed:", e?.message || e);
+  }
 
-  const removed = exactRemoved + sourceRemoved;
+  let indexPresent = false;
+  try {
+    await ensureExpenseIndexes();
+    indexPresent = await verifyExpenseUniqueIndex();
+  } catch (e: any) {
+    console.error("Failed to ensure expense unique index:", e?.message || e);
+    indexPresent = await verifyExpenseUniqueIndex();
+  }
+
+  // Record a cycle marker so deployments can see maintenance has run at least
+  // once via the new self-healing path (v1 marker kept for history).
+  try {
+    await SystemState.updateOne(
+      { key: DEDUPE_MARKER_V2_KEY },
+      { $set: { value: new Date().toISOString(), updatedAt: new Date() } },
+      { upsert: true },
+    );
+  } catch (e: any) {
+    console.error("Expense maintenance: failed to record marker:", e?.message || e);
+  }
+
+  const removed = sourceRemoved + exactRemoved;
   if (removed > 0) {
     console.log(`Expense maintenance: removed ${removed} duplicate linked expense row(s)`);
   }
   if (normalized > 0) {
     console.log(`Expense maintenance: normalized payment method on ${normalized} ledger row(s)`);
   }
+  if (!indexPresent) {
+    console.warn("Expense maintenance: unique index could not be confirmed after this cycle.");
+  }
+
+  return { sourceRemoved, normalized, exactRemoved, indexPresent };
 };
 
 /**
- * Runs the one-time maintenance required before serving traffic:
- * dedupe existing duplicates + normalize methods, then enforce the unique index.
+ * Startup maintenance: the dedupe cycle now runs on EVERY boot (it is cheap and
+ * idempotent) so duplicates created after the old one-time marker was consumed
+ * are cleaned automatically instead of persisting forever.
  */
 export const runStartupMaintenance = async (): Promise<void> => {
-  try {
-    await runExpenseDedupeOnce();
-  } catch (e: any) {
-    console.error("Expense dedupe failed:", e?.message || e);
-  }
-
-  try {
-    await ensureExpenseIndexes();
-  } catch (e: any) {
-    console.error("Failed to ensure expense unique index:", e?.message || e);
-  }
+  await runMaintenanceCycle();
 };
 
 export default runStartupMaintenance;

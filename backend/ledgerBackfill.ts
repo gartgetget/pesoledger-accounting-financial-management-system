@@ -93,11 +93,15 @@ export async function runLedgerBackfill(force = false): Promise<void> {
 
   let revenueCount = 0;
   let expenseCount = 0;
+  let phase = "start";
+  let currentId = "";
 
   try {
     // ---- Job orders -> revenue collections and operating expenses ----
     const jobs = await JobOrder.collection.find({}).toArray();
+    phase = "jobs";
     for (const job of jobs) {
+      currentId = String(job._id);
       const workspaceId = String(job.workspaceId || "");
       const customers = Array.isArray(job.customers) ? job.customers : [];
       const customerRevenue = customers.reduce(
@@ -202,7 +206,6 @@ export async function runLedgerBackfill(force = false): Promise<void> {
               workspaceId,
               relatedModule: "job",
               relatedId: String(job._id),
-              category,
               paymentMethod: normalizedMethod,
               createdBy: String(job.createdBy || ""),
               createdAt: now,
@@ -260,7 +263,9 @@ export async function runLedgerBackfill(force = false): Promise<void> {
 
     // ---- Vehicle expenses -> GAS / SASAKYAN expenses ----
     const vexpDocs = await VehicleExpense.collection.find({}).toArray();
+    phase = "vehicles";
     for (const v of vexpDocs) {
+      currentId = String(v._id);
       const workspaceId = String(v.workspaceId || "");
       const linked = v.expenseId ? String(v.expenseId) : "";
 
@@ -290,7 +295,9 @@ export async function runLedgerBackfill(force = false): Promise<void> {
 
     // ---- Payroll -> SALARY expenses ----
     const payrollDocs = await PayrollEntry.collection.find({}).toArray();
+    phase = "payroll";
     for (const p of payrollDocs) {
+      currentId = String(p._id);
       const workspaceId = String(p.workspaceId || "");
       const linked = p.expenseId ? String(p.expenseId) : "";
 
@@ -341,6 +348,9 @@ export async function runLedgerBackfill(force = false): Promise<void> {
     }
   } catch (e: any) {
     // Do not mark the backfill complete; it will retry on the next startup.
-    console.error("Ledger backfill failed:", e?.message || e);
+    console.error(
+      `Ledger backfill failed at phase=${phase} id=${currentId}:`,
+      e?.message || e,
+    );
   }
 }

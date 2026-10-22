@@ -13,6 +13,7 @@ import reportRoutes from "./routes/reportRoutes.js";
 import payrollRoutes from "./routes/payrollRoutes.js";
 import vehiclesRoutes from "./routes/vehiclesRoutes.js";
 import areaRoutes from "./routes/areaRoutes.js";
+import maintenanceRoutes from "./routes/maintenanceRoutes.js";
 
 dotenv.config();
 
@@ -43,6 +44,7 @@ app.use("/api", reportRoutes);
 app.use("/api", payrollRoutes);
 app.use("/api", vehiclesRoutes);
 app.use("/api", areaRoutes);
+app.use("/api", maintenanceRoutes);
 
 app.use((_req, res) => {
   res.status(404).json({ message: "Not found" });

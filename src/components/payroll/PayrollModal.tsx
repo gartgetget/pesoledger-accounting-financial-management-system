@@ -3,6 +3,7 @@ import { X, Users, Calculator } from 'lucide-react';
 import { useAccounting } from '../../context/AccountingContext';
 import { formatPHP, parseNumber } from '../../utils/currency';
 import { getTodayDateString } from '../../utils/date';
+import { resolveEmployeeBaseRate } from '../../utils/payroll';
 import { Employee, PayrollRecord } from '../../types';
 
 interface PayrollModalProps {
@@ -28,13 +29,16 @@ export const PayrollModal: React.FC<PayrollModalProps> = ({ isOpen, onClose, edi
   const [deductions, setDeductions] = useState('0');
   const [paymentMethodId, setPaymentMethodId] = useState(paymentMethods[0]?.id || 'pm-1');
   const [notes, setNotes] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Auto-fill base rate from selected employee's daily rate (create mode only)
+  // Auto-fill base rate from selected employee's base rate (shared rule with
+  // the Weekly Payroll Report), create mode only
   useEffect(() => {
     if (editRecord) return;
     const selected = employees.find((e) => e.id === employeeId);
     if (selected) {
-      const rate = selected.dailyRate || (selected.basicSalary || 8500) / 6;
+      const rate =
+        resolveEmployeeBaseRate(employees, employeeId, selected.name) || 8500 / 6;
       setBaseRate(String(Math.round(rate * 100) / 100));
     }
   }, [employeeId, employees, editRecord]);
@@ -48,9 +52,19 @@ export const PayrollModal: React.FC<PayrollModalProps> = ({ isOpen, onClose, edi
   useEffect(() => {
     if (!editRecord) return;
     const days = Number(editRecord.daysWorked) > 0 ? Number(editRecord.daysWorked) : 6;
+    // Same rate rule as the Weekly Payroll Report: stored voucher rate first,
+    // then the employee profile rate, then stored Basic Salary ÷ days as a
+    // last resort (e.g. the profile was deleted).
+    const profileRate = resolveEmployeeBaseRate(
+      employees,
+      editRecord.employeeId,
+      editRecord.employeeName
+    );
     const seedRate = editRecord.dailyRate
       ? Number(editRecord.dailyRate)
-      : Math.round(((editRecord.basicSalary || 0) / days) * 100) / 100;
+      : profileRate > 0
+        ? profileRate
+        : Math.round(((editRecord.basicSalary || 0) / days) * 100) / 100;
     const seedFoodRate = editRecord.foodRate
       ? Number(editRecord.foodRate)
       : Math.round(((editRecord.foodAllowance || 0) / days) * 100) / 100;
@@ -89,8 +103,9 @@ export const PayrollModal: React.FC<PayrollModalProps> = ({ isOpen, onClose, edi
   // Net Salary = Gross Salary - Deductions
   const netSalary = Math.max(0, grossSalary - parsedDeduc);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
     const emp = employees.find((x) => x.id === employeeId);
     if (!emp || parsedDays <= 0 || netSalary <= 0) {
       alert('Please select an employee, enter days worked (1 or more), and valid salary details.');
@@ -118,13 +133,17 @@ export const PayrollModal: React.FC<PayrollModalProps> = ({ isOpen, onClose, edi
       notes: notes.trim(),
     };
 
-    if (editRecord) {
-      updatePayroll(editRecord.id, payload);
-    } else {
-      processPayroll(payload);
+    setIsSubmitting(true);
+    try {
+      if (editRecord) {
+        await updatePayroll(editRecord.id, payload);
+      } else {
+        await processPayroll(payload);
+      }
+      onClose();
+    } finally {
+      setIsSubmitting(false);
     }
-
-    onClose();
   };
 
   return (
@@ -403,9 +422,14 @@ export const PayrollModal: React.FC<PayrollModalProps> = ({ isOpen, onClose, edi
             </button>
             <button
               type="submit"
-              className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-lg shadow-xs cursor-pointer transition-colors"
+              disabled={isSubmitting}
+              className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-lg shadow-xs cursor-pointer transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              {editRecord ? 'Update Voucher (₱)' : 'Process & Post Payroll (₱)'}
+              {isSubmitting
+                ? 'Posting…'
+                : editRecord
+                  ? 'Update Voucher (₱)'
+                  : 'Process & Post Payroll (₱)'}
             </button>
           </div>
         </form>
