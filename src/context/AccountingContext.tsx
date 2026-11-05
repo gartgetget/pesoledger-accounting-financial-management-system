@@ -81,7 +81,7 @@ export interface AccountingContextType {
   addExpensesBatch: (data: Array<Omit<Expense, 'id' | 'createdAt'>>) => Promise<void>;
   updateExpense: (id: string, updates: Partial<Expense>) => void; voidExpense: (id: string) => void;
   addPart: (part: Omit<Part, 'id'>) => void; updatePart: (id: string, updates: Partial<Part>) => void; deletePart: (id: string) => void; restockPart: (id: string, qty: number) => void;
-  createServiceJob: (job: Omit<ServiceJob, 'id' | 'createdAt'>) => Promise<string | null>;
+  createServiceJob: (job: Omit<ServiceJob, 'id' | 'createdAt' | 'jobNumber'>) => Promise<string | null>;
   updateServiceJob: (id: string, updates: Partial<ServiceJob>) => Promise<boolean>; deleteServiceJob: (id: string) => void;
   addEmployee: (employee: Omit<Employee, 'id'>) => void; updateEmployee: (id: string, updates: Partial<Employee>) => void;
   deleteEmployee: (id: string) => void; processPayroll: (record: Omit<PayrollRecord, 'id' | 'createdAt'>) => void;
@@ -614,12 +614,24 @@ export const AccountingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     setParts((prev) => prev.map((part) => (part.id === id ? { ...part, quantity: part.quantity + qty } : part)));
   };
 
-  const createServiceJob = async (jobData: Omit<ServiceJob, 'id' | 'createdAt'>): Promise<string> => {
+  const createServiceJob = async (
+    jobData: Omit<ServiceJob, 'id' | 'createdAt' | 'jobNumber'>,
+  ): Promise<string | null> => {
     try {
-      const result = await api.post<{ _id?: string; ledgerSyncErrors?: string[] }>(`/api/${activeWorkspaceId}/job-orders`, {
+      const existingJobs = await api.get<Array<{ jobNumber?: string }>>(
+        `/api/${activeWorkspaceId}/job-orders`,
+      );
+      const yearPrefix = `JOB-${new Date().getFullYear()}-`;
+      const highestNumber = existingJobs.reduce((highest, job) => {
+        if (!job.jobNumber?.startsWith(yearPrefix)) return highest;
+        const number = Number(job.jobNumber.slice(yearPrefix.length));
+        return Number.isSafeInteger(number) ? Math.max(highest, number) : highest;
+      }, 0);
+      const nextJobNumber = `${yearPrefix}${String(highestNumber + 1).padStart(3, '0')}`;
+      const result = await api.post<{ _id?: string; jobNumber: string; ledgerSyncErrors?: string[] }>(`/api/${activeWorkspaceId}/job-orders`, {
         customerId: jobData.customerId,
         customerName: jobData.customerName,
-        jobNumber: jobData.jobNumber,
+        jobNumber: nextJobNumber,
         assignedTechnician: jobData.technicianId,
         technicianName: jobData.technicianName,
         area: jobData.area || '',
@@ -644,7 +656,7 @@ export const AccountingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         date: jobData.date,
         notes: jobData.notes || '',
       });
-      addAudit('CREATE', 'Jobs', `Created service job ${jobData.jobNumber}`);
+      addAudit('CREATE', 'Jobs', `Created service job ${result.jobNumber}`);
       await refetchAllData();
       if (result.ledgerSyncErrors?.length) {
         toast.error(`Job saved, but ledger posting failed: ${result.ledgerSyncErrors.join('; ')}`);

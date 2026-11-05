@@ -5,17 +5,6 @@ import { formatPHP, parseNumber } from '../../utils/currency';
 import { getTodayDateString } from '../../utils/date';
 import { PaymentStatus, JobStatus, ServiceJob, JobCustomer, JobPartLine } from '../../types';
 
-const nextJobNumber = (jobs: ServiceJob[]): string => {
-  const year = new Date().getFullYear();
-  const prefix = `JOB-${year}-`;
-  const max = jobs
-    .map((j) => j.jobNumber)
-    .filter((n) => n.startsWith(prefix))
-    .map((n) => parseInt(n.slice(prefix.length), 10))
-    .reduce((a, b) => (Number.isNaN(b) ? a : Math.max(a, b)), 0);
-  return `${prefix}${String(max + 1).padStart(3, '0')}`;
-};
-
 interface JobModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -40,7 +29,6 @@ export const JobModal: React.FC<JobModalProps> = ({
     employees,
     serviceCategories,
     paymentMethods,
-    serviceJobs,
     areas,
     createServiceJob,
     updateServiceJob,
@@ -48,9 +36,7 @@ export const JobModal: React.FC<JobModalProps> = ({
   } = useAccounting();
 
   const [date, setDate] = useState(editItem ? editItem.date : getTodayDateString());
-  const [jobNumber, setJobNumber] = useState(
-    editItem ? editItem.jobNumber : nextJobNumber(serviceJobs)
-  );
+  const [jobNumber, setJobNumber] = useState(editItem?.jobNumber || '');
 
   const [jobCustomers, setJobCustomers] = useState<JobCustomer[]>(() => {
     if (editItem?.customers && editItem.customers.length > 0) {
@@ -213,16 +199,14 @@ export const JobModal: React.FC<JobModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!jobNumber.trim() || !description.trim()) {
-      alert('Please fill in Job Number and Description.');
+    if (!description.trim() || (editItem && !jobNumber.trim())) {
+      alert(editItem ? 'Please fill in Job Number and Description.' : 'Please fill in the Description.');
       return;
     }
 
     const primaryRow = cleanCustomerRows.find((c) => c.name.trim());
     const resolvedCustomerName = primaryRow ? primaryRow.name.trim() : 'Walk-in Customer';
-
     const payload = {
-      jobNumber: jobNumber.trim(),
       customerId: primaryRow?.customerId || 'cust-direct',
       customerName: resolvedCustomerName,
       area,
@@ -257,7 +241,7 @@ export const JobModal: React.FC<JobModalProps> = ({
     };
 
     if (editItem) {
-      const updated = await updateServiceJob(editItem.id, payload);
+      const updated = await updateServiceJob(editItem.id, { ...payload, jobNumber: jobNumber.trim() });
       if (updated) onClose();
     } else {
       const createdId = await createServiceJob(payload);
@@ -294,15 +278,21 @@ export const JobModal: React.FC<JobModalProps> = ({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Job Order # <span className="text-rose-500">*</span>
+                Job Order #
               </label>
-              <input
-                type="text"
-                value={jobNumber}
-                onChange={(e) => setJobNumber(e.target.value)}
-                className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg font-mono font-semibold"
-                required
-              />
+              {editItem ? (
+                <input
+                  type="text"
+                  value={jobNumber}
+                  onChange={(e) => setJobNumber(e.target.value)}
+                  className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg font-mono font-semibold"
+                  required
+                />
+              ) : (
+                <div className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg font-mono font-semibold text-slate-500 bg-slate-50">
+                  Automatically assigned when saved
+                </div>
+              )}
             </div>
 
             <div>

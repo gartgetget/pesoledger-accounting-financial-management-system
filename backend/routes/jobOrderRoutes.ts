@@ -140,6 +140,19 @@ const calculateJobTotals = (
   return { subtotal, discountAmount, totalAmount: subtotal - discountAmount };
 };
 
+const getNextJobNumber = async (): Promise<string> => {
+  const year = new Date().getFullYear();
+  const prefix = `JOB-${year}-`;
+  const existingJobs = await JobOrder.find({
+    jobNumber: new RegExp(`^${prefix}\\d+$`),
+  }).select("jobNumber").lean();
+  const maxNumber = existingJobs.reduce((max, job) => {
+    const number = Number(job.jobNumber.slice(prefix.length));
+    return Number.isSafeInteger(number) ? Math.max(max, number) : max;
+  }, 0);
+  return `${prefix}${String(maxNumber + 1).padStart(3, "0")}`;
+};
+
 const ensureJobExpenseCategory = async (workspaceId: string, name: string): Promise<string> => {
   const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const existing = await Category.findOne({
@@ -479,15 +492,6 @@ router.post("/:workspaceId/job-orders", ensureWorkspaceAccess, async (req, res) 
   const { workspaceId } = req.params;
   const b = req.body || {};
 
-  if (!b.jobNumber) {
-    return res.status(400).json({ message: "Job number is required" });
-  }
-
-  const duplicate = await JobOrder.exists({ jobNumber: String(b.jobNumber) });
-  if (duplicate) {
-    return res.status(400).json({ message: "Job number already exists — choose a different Job Order #" });
-  }
-
   const custRows = b.customers === undefined ? [] : sanitizeCustomers(b.customers);
   if (!custRows) {
     return res.status(400).json({ message: "Customer collection and material prices must be valid non-negative numbers" });
@@ -508,11 +512,11 @@ router.post("/:workspaceId/job-orders", ensureWorkspaceAccess, async (req, res) 
     return res.status(400).json({ message: "Job collection must be a valid non-negative amount" });
   }
 
-  const job = await JobOrder.create({
+  const jobData = {
     workspaceId,
     customerId: primary ? primary.customerId || b.customerId : b.customerId,
     customerName: primary ? primary.name : b.customerName || "",
-    jobNumber: b.jobNumber,
+    jobNumber: "",
     assignedTechnician: b.assignedTechnician || b.technicianId || "",
     technicianName: b.technicianName || "",
     area: b.area || "",
@@ -544,7 +548,20 @@ router.post("/:workspaceId/job-orders", ensureWorkspaceAccess, async (req, res) 
       || "",
     notes: b.notes || "",
     createdBy: req.user._id.toString(),
-  });
+  };
+  let job: JobOrderDoc | null = null;
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    jobData.jobNumber = await getNextJobNumber();
+    try {
+      job = await JobOrder.create(jobData);
+      break;
+    } catch (error) {
+      const duplicateKeyError = typeof error === "object" && error !== null && "code" in error &&
+        (error as { code?: number }).code === 11000;
+      if (!duplicateKeyError || attempt === 4) throw error;
+    }
+  }
+  if (!job) throw new Error("Unable to allocate a unique job order number");
 
   const ledgerSyncErrors: string[] = [];
   try {
