@@ -39,6 +39,7 @@ export const DailyAccountingView: React.FC<{
     addExpense,
     getSummaryForRange,
     isApiLoading,
+    userRole,
   } = useAccounting();
 
   // Selected Date (defaults to today 2026-09-22)
@@ -287,6 +288,7 @@ export const DailyAccountingView: React.FC<{
       </div>
 
       {/* QUICK ADD DAILY EXPENSE ROW (CORE OBJECTIVE 5) */}
+      {userRole === 'admin' && (
       <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
@@ -361,6 +363,7 @@ export const DailyAccountingView: React.FC<{
           </div>
         </form>
       </div>
+      )}
 
       {/* SECTION 12: DETAILED DAILY BREAKDOWN */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

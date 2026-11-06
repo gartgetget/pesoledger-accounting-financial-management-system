@@ -27,6 +27,7 @@ export const Header: React.FC<HeaderProps> = ({
 }) => {
   const {
     activeTab,
+    userRole,
     dateFilterPreset,
     setDateFilterPreset,
     dateRange,
@@ -205,35 +206,39 @@ export const Header: React.FC<HeaderProps> = ({
           )}
         </div>
 
-        <button
-          onClick={onOpenRevenueModal}
-          className="flex items-center gap-1 px-2.5 sm:px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-md shadow-xs transition-colors cursor-pointer whitespace-nowrap"
-          title="Record incoming payment or collection"
-          aria-label="Record revenue"
-        >
-          <ArrowUpRight className="w-3.5 h-3.5" />
-          <span className="hidden sm:inline">+ Revenue</span>
-        </button>
+        {userRole === 'admin' && (
+          <>
+            <button
+              onClick={onOpenRevenueModal}
+              className="flex items-center gap-1 px-2.5 sm:px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-md shadow-xs transition-colors cursor-pointer whitespace-nowrap"
+              title="Record incoming payment or collection"
+              aria-label="Record revenue"
+            >
+              <ArrowUpRight className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">+ Revenue</span>
+            </button>
 
-        <button
-          onClick={onOpenExpenseModal}
-          className="flex items-center gap-1 px-2.5 sm:px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold rounded-md shadow-xs transition-colors cursor-pointer whitespace-nowrap"
-          title="Record business expense"
-          aria-label="Record expense"
-        >
-          <ArrowDownRight className="w-3.5 h-3.5" />
-          <span className="hidden sm:inline">+ Expense</span>
-        </button>
+            <button
+              onClick={onOpenExpenseModal}
+              className="flex items-center gap-1 px-2.5 sm:px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold rounded-md shadow-xs transition-colors cursor-pointer whitespace-nowrap"
+              title="Record business expense"
+              aria-label="Record expense"
+            >
+              <ArrowDownRight className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">+ Expense</span>
+            </button>
 
-        <button
-          onClick={onOpenJobModal}
-          className="flex items-center gap-1 px-2.5 sm:px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold rounded-md shadow-xs transition-colors cursor-pointer whitespace-nowrap"
-          title="Create a new service job order"
-          aria-label="Create job"
-        >
-          <Wrench className="w-3.5 h-3.5" />
-          <span className="hidden sm:inline">+ Job</span>
-        </button>
+            <button
+              onClick={onOpenJobModal}
+              className="flex items-center gap-1 px-2.5 sm:px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold rounded-md shadow-xs transition-colors cursor-pointer whitespace-nowrap"
+              title="Create a new service job order"
+              aria-label="Create job"
+            >
+              <Wrench className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">+ Job</span>
+            </button>
+          </>
+        )}
       </div>
 
       {/* Custom Date Range Modal */}
