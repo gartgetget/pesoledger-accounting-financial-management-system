@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
-import { ArrowRight, LockKeyhole, UserPlus, Building2, Loader2 } from 'lucide-react';
+import { ArrowRight, LockKeyhole, UserPlus, Building2, Loader2, ShieldCheck, User } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { useAccounting } from '../../context/AccountingContext';
+import { UserRole } from '../../types';
 
 interface LoginViewProps {
   onAuthSuccess: (message: string) => void;
@@ -8,11 +10,13 @@ interface LoginViewProps {
 
 export const LoginView: React.FC<LoginViewProps> = ({ onAuthSuccess }) => {
   const { login: authLogin, register: authRegister, workspaces, activeWorkspaceId, selectWorkspace, isAuthenticated, isLoading } = useAuth();
+  const { setUserRole } = useAccounting();
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [workspaceName, setWorkspaceName] = useState('');
   const [password, setPassword] = useState('');
+  const [loginRole, setLoginRole] = useState<UserRole>('admin');
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -21,6 +25,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onAuthSuccess }) => {
     setError('');
     try {
       await authLogin(userEmail.trim(), userPassword);
+      setUserRole(loginRole);
       onAuthSuccess('Signed in successfully. Welcome back!');
     } catch (loginError) {
       setError(loginError instanceof Error ? loginError.message : 'Unable to sign in with the server.');
@@ -34,6 +39,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onAuthSuccess }) => {
     setError('');
     try {
       await authRegister(name.trim(), userEmail.trim(), userPassword, userWorkspaceName.trim());
+      setUserRole('admin');
       onAuthSuccess('Account created and signed in successfully!');
     } catch (registerError) {
       setError(registerError instanceof Error ? registerError.message : 'Unable to create the account.');
@@ -142,6 +148,31 @@ export const LoginView: React.FC<LoginViewProps> = ({ onAuthSuccess }) => {
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">Password</label>
                 <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Enter your password" className="w-full text-sm px-3 py-2.5 border border-slate-300 rounded-lg" required />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">Sign in as</label>
+                <div className="grid grid-cols-2 gap-1 p-1 bg-slate-100 rounded-lg text-xs font-semibold">
+                  <button
+                    type="button"
+                    onClick={() => setLoginRole('admin')}
+                    className={`flex items-center justify-center gap-1.5 px-3 py-2 rounded-md transition-colors cursor-pointer ${
+                      loginRole === 'admin' ? 'bg-white text-emerald-700 shadow-xs' : 'text-slate-600 hover:text-slate-800'
+                    }`}
+                  >
+                    <ShieldCheck className="w-4 h-4" />
+                    Admin
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setLoginRole('staff')}
+                    className={`flex items-center justify-center gap-1.5 px-3 py-2 rounded-md transition-colors cursor-pointer ${
+                      loginRole === 'staff' ? 'bg-white text-amber-700 shadow-xs' : 'text-slate-600 hover:text-slate-800'
+                    }`}
+                  >
+                    <User className="w-4 h-4" />
+                    Staff (View Only)
+                  </button>
+                </div>
               </div>
               {error && <p className="text-xs text-rose-600">{error}</p>}
               <button type="submit" disabled={isSubmitting} className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-semibold cursor-pointer disabled:opacity-50">
