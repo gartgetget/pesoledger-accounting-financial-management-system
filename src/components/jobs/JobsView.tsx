@@ -120,13 +120,15 @@ export const JobsView: React.FC<JobsViewProps> = ({ onOpenJobModal, onEditJob })
               {formatPHP(totalRevenueGenerated)}
             </span>
           </div>
-          <button
-            onClick={onOpenJobModal}
-            className="flex items-center gap-1.5 px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold rounded-lg shadow-xs transition-colors cursor-pointer"
-          >
-            <Plus className="w-4 h-4" />
-            <span>+ New Job Order</span>
-          </button>
+          {userRole === 'admin' && (
+            <button
+              onClick={onOpenJobModal}
+              className="flex items-center gap-1.5 px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold rounded-lg shadow-xs transition-colors cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              <span>+ New Job Order</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -312,13 +314,15 @@ export const JobsView: React.FC<JobsViewProps> = ({ onOpenJobModal, onEditJob })
                           <Printer className="w-3.5 h-3.5 text-slate-600" />
                           <span>Invoice</span>
                         </button>
-                        <button
-                          onClick={() => onEditJob(job)}
-                          className="p-1 text-slate-400 hover:text-slate-700 cursor-pointer"
-                          title="Edit Job"
-                        >
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </button>
+                        {userRole === 'admin' && (
+                          <button
+                            onClick={() => onEditJob(job)}
+                            className="p-1 text-slate-400 hover:text-slate-700 cursor-pointer"
+                            title="Edit Job"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                         {userRole === 'admin' && (
                           <button
                             onClick={() => setDeleteTarget(job)}

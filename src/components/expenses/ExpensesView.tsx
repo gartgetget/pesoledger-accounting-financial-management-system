@@ -152,13 +152,15 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
             </span>
           </div>
 
-          <button
-            onClick={onOpenExpenseModal}
-            className="flex items-center gap-1.5 px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold rounded-lg shadow-xs transition-colors cursor-pointer"
-          >
-            <ArrowDownRight className="w-4 h-4" />
-            <span>+ Record Expense</span>
-          </button>
+          {userRole === 'admin' && (
+            <button
+              onClick={onOpenExpenseModal}
+              className="flex items-center gap-1.5 px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold rounded-lg shadow-xs transition-colors cursor-pointer"
+            >
+              <ArrowDownRight className="w-4 h-4" />
+              <span>+ Record Expense</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -364,14 +366,16 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
                     </td>
                     <td className="py-3 px-4 text-center whitespace-nowrap">
                       <div className="flex items-center justify-center gap-1.5">
-                        <button
-                          onClick={() => onEditExpense(e)}
-                          disabled={e.isVoid}
-                          className="p-1 text-slate-400 hover:text-slate-700 disabled:opacity-30 cursor-pointer"
-                          title="Edit expense"
-                        >
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </button>
+                        {userRole === 'admin' && (
+                          <button
+                            onClick={() => onEditExpense(e)}
+                            disabled={e.isVoid}
+                            className="p-1 text-slate-400 hover:text-slate-700 disabled:opacity-30 cursor-pointer"
+                            title="Edit expense"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                         {userRole === 'admin' && (
                           <button
                             onClick={() => voidExpense(e.id)}

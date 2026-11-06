@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Users,
   Plus,
@@ -8,6 +8,7 @@ import {
   Edit2,
   Calendar,
   FileSpreadsheet,
+  Search,
 } from 'lucide-react';
 import { useAccounting } from '../../context/AccountingContext';
 import { PayrollSkeleton } from './PayrollSkeleton';
@@ -72,6 +73,22 @@ export const PayrollView: React.FC = () => {
     return found ? found.name : pmId;
   };
 
+  const [searchTerm, setSearchTerm] = useState('');
+  const [areaFilter, setAreaFilter] = useState('ALL');
+  const [paymentFilter, setPaymentFilter] = useState('ALL');
+
+  const filteredPayroll = useMemo(() => {
+    return payrollRecords.filter((r) => {
+      if (areaFilter !== 'ALL' && (r.area || '') !== areaFilter) return false;
+      if (paymentFilter !== 'ALL' && r.paymentMethodId !== paymentFilter) return false;
+      if (searchTerm.trim()) {
+        const q = searchTerm.toLowerCase();
+        if (!r.employeeName.toLowerCase().includes(q)) return false;
+      }
+      return true;
+    });
+  }, [payrollRecords, searchTerm, areaFilter, paymentFilter]);
+
   const totalPayrollPaid = payrollRecords.reduce((s, r) => s + r.netSalary, 0);
 
   const handleExport = () => {
@@ -114,24 +131,28 @@ export const PayrollView: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => setShowAddEmpModal(true)}
-            className="flex items-center gap-1.5 px-3.5 py-2 border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-semibold cursor-pointer"
-          >
-            <UserPlus className="w-4 h-4 text-slate-500" />
-            <span>+ Add Employee</span>
-          </button>
+          {userRole === 'admin' && (
+            <button
+              onClick={() => setShowAddEmpModal(true)}
+              className="flex items-center gap-1.5 px-3.5 py-2 border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-semibold cursor-pointer"
+            >
+              <UserPlus className="w-4 h-4 text-slate-500" />
+              <span>+ Add Employee</span>
+            </button>
+          )}
 
-          <button
-            onClick={() => {
-              setEditingRecord(null);
-              setIsPayrollModalOpen(true);
-            }}
-            className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold shadow-xs cursor-pointer"
-          >
-            <PhilippinePeso className="w-4 h-4" />
-            <span>Process Payroll</span>
-          </button>
+          {userRole === 'admin' && (
+            <button
+              onClick={() => {
+                setEditingRecord(null);
+                setIsPayrollModalOpen(true);
+              }}
+              className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold shadow-xs cursor-pointer"
+            >
+              <PhilippinePeso className="w-4 h-4" />
+              <span>Process Payroll</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -265,6 +286,46 @@ export const PayrollView: React.FC = () => {
           </button>
         </div>
 
+        {/* FILTER BAR: search + area & payment method dropdowns */}
+        <div className="p-4 border-b border-slate-100 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2.5">
+          <div className="md:col-span-2 relative">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Search employee name..."
+              className="w-full text-xs pl-9 pr-3 py-2 border border-slate-200 rounded-lg bg-slate-50 focus:bg-white focus:border-indigo-400 focus:outline-hidden"
+            />
+          </div>
+          <select
+            value={areaFilter}
+            onChange={(e) => setAreaFilter(e.target.value)}
+            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700 focus:outline-hidden cursor-pointer"
+            aria-label="Filter by area"
+          >
+            <option value="ALL">All Areas</option>
+            {areas.map((a) => (
+              <option key={a.id} value={a.name}>
+                {a.name}
+              </option>
+            ))}
+          </select>
+          <select
+            value={paymentFilter}
+            onChange={(e) => setPaymentFilter(e.target.value)}
+            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700 focus:outline-hidden cursor-pointer"
+            aria-label="Filter by payment method"
+          >
+            <option value="ALL">All Payment Methods</option>
+            {paymentMethods.map((pm) => (
+              <option key={pm.id} value={pm.id}>
+                {pm.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead className="bg-slate-50 text-slate-500 uppercase tracking-wider font-semibold border-b border-slate-200">
@@ -283,14 +344,16 @@ export const PayrollView: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 font-mono">
-              {payrollRecords.length === 0 ? (
+              {filteredPayroll.length === 0 ? (
                 <tr>
                   <td colSpan={11} className="py-8 text-center text-slate-400 text-xs font-sans">
-                    No payroll disbursements recorded yet. Click "Process Payroll" to disburse wages.
+                    {payrollRecords.length > 0
+                      ? 'No payroll vouchers match your search or filters.'
+                      : 'No payroll disbursements recorded yet. Click "Process Payroll" to disburse wages.'}
                   </td>
                 </tr>
               ) : (
-                payrollRecords.map((r) => (
+                filteredPayroll.map((r) => (
                   <tr key={r.id} className="hover:bg-slate-50/70">
                     <td className="py-2.5 px-4 font-sans font-medium text-slate-700 whitespace-nowrap">
                       {formatDateDisplay(r.date)}
@@ -324,16 +387,18 @@ export const PayrollView: React.FC = () => {
                     </td>
                     <td className="py-2.5 px-4 text-center whitespace-nowrap">
                       <div className="flex items-center justify-center gap-2">
-                        <button
-                          onClick={() => {
-                            setEditingRecord(r);
-                            setIsPayrollModalOpen(true);
-                          }}
-                          className="p-1 text-slate-400 hover:text-slate-700 cursor-pointer"
-                          title="Edit payroll voucher"
-                        >
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </button>
+                        {userRole === 'admin' && (
+                          <button
+                            onClick={() => {
+                              setEditingRecord(r);
+                              setIsPayrollModalOpen(true);
+                            }}
+                            className="p-1 text-slate-400 hover:text-slate-700 cursor-pointer"
+                            title="Edit payroll voucher"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                         {userRole === 'admin' && (
                           <button
                             onClick={() => setDeleteTarget(r)}

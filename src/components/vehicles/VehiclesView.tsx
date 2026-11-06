@@ -169,21 +169,25 @@ export const VehiclesView: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => setShowAddVehicleModal(true)}
-            className="flex items-center gap-1.5 px-3.5 py-2 border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-semibold cursor-pointer"
-          >
-            <Plus className="w-4 h-4 text-slate-500" />
-            <span>+ Add Vehicle</span>
-          </button>
+          {userRole === 'admin' && (
+            <button
+              onClick={() => setShowAddVehicleModal(true)}
+              className="flex items-center gap-1.5 px-3.5 py-2 border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-semibold cursor-pointer"
+            >
+              <Plus className="w-4 h-4 text-slate-500" />
+              <span>+ Add Vehicle</span>
+            </button>
+          )}
 
-          <button
-            onClick={() => setShowLogExpenseModal(true)}
-            className="flex items-center gap-1.5 px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg text-xs font-semibold shadow-xs cursor-pointer"
-          >
-            <Fuel className="w-4 h-4" />
-            <span>Log Vehicle Expense</span>
-          </button>
+          {userRole === 'admin' && (
+            <button
+              onClick={() => setShowLogExpenseModal(true)}
+              className="flex items-center gap-1.5 px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg text-xs font-semibold shadow-xs cursor-pointer"
+            >
+              <Fuel className="w-4 h-4" />
+              <span>Log Vehicle Expense</span>
+            </button>
+          )}
         </div>
       </div>
 

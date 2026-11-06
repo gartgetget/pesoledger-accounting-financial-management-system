@@ -250,13 +250,15 @@ export const MigrationView: React.FC = () => {
               >
                 Discard
               </button>
-              <button
-                onClick={handleConfirmImport}
-                className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow-xs cursor-pointer"
-              >
-                <CheckCircle2 className="w-4 h-4" />
-                <span>Confirm & Save to Database</span>
-              </button>
+              {userRole === 'admin' && (
+                <button
+                  onClick={handleConfirmImport}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow-xs cursor-pointer"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>Confirm & Save to Database</span>
+                </button>
+              )}
             </div>
           </div>
 
@@ -390,11 +392,13 @@ export const MigrationView: React.FC = () => {
             <span>Export Database JSON Backup</span>
           </button>
 
-          <label className="flex items-center gap-1.5 px-3.5 py-2 border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-semibold cursor-pointer">
-            <Upload className="w-3.5 h-3.5 text-slate-500" />
-            <span>Restore JSON Backup</span>
-            <input type="file" accept=".json" onChange={handleJSONFileRestore} className="hidden" />
-          </label>
+          {userRole === 'admin' && (
+            <label className="flex items-center gap-1.5 px-3.5 py-2 border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-semibold cursor-pointer">
+              <Upload className="w-3.5 h-3.5 text-slate-500" />
+              <span>Restore JSON Backup</span>
+              <input type="file" accept=".json" onChange={handleJSONFileRestore} className="hidden" />
+            </label>
+          )}
 
           {userRole === 'admin' && (
             <button

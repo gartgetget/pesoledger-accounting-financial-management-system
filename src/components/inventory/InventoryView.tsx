@@ -123,13 +123,15 @@ export const InventoryView: React.FC = () => {
           <div className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-600">
             <span className="font-bold text-slate-900">{filteredParts.length}</span> visible of {parts.length} parts
           </div>
-          <button
-            onClick={() => setShowAddModal(true)}
-            className="flex items-center justify-center gap-1.5 px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-semibold shadow-xs cursor-pointer"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Add New Part</span>
-          </button>
+          {userRole === 'admin' && (
+            <button
+              onClick={() => setShowAddModal(true)}
+              className="flex items-center justify-center gap-1.5 px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-semibold shadow-xs cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Add New Part</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -254,7 +256,7 @@ export const InventoryView: React.FC = () => {
                     <p className="text-[11px] text-slate-400 mt-1 mb-3">
                       {parts.length === 0 ? 'Add your first part to start tracking stock.' : 'Try clearing the search or category filter.'}
                     </p>
-                    {parts.length === 0 && (
+                    {parts.length === 0 && userRole === 'admin' && (
                       <button
                         onClick={() => setShowAddModal(true)}
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-600 text-white rounded-lg text-xs font-semibold cursor-pointer"
@@ -309,14 +311,16 @@ export const InventoryView: React.FC = () => {
                       </td>
                       <td className="py-3 px-4 text-center whitespace-nowrap">
                         <div className="flex items-center justify-center gap-2">
-                          <button
-                            onClick={() => setRestockModalTarget(p)}
-                            className="flex items-center gap-1 px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 rounded text-xs font-semibold cursor-pointer"
-                            title="Restock part"
-                          >
-                            <RefreshCw className="w-3 h-3" />
-                            <span>Restock</span>
-                          </button>
+                          {userRole === 'admin' && (
+                            <button
+                              onClick={() => setRestockModalTarget(p)}
+                              className="flex items-center gap-1 px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 rounded text-xs font-semibold cursor-pointer"
+                              title="Restock part"
+                            >
+                              <RefreshCw className="w-3 h-3" />
+                              <span>Restock</span>
+                            </button>
+                          )}
                           {userRole === 'admin' && (
                             <button
                               onClick={() => deletePart(p.id)}

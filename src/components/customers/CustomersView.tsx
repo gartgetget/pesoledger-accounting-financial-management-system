@@ -92,13 +92,15 @@ export const CustomersView: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => setShowAddModal(true)}
-            className="flex items-center gap-1.5 px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-xs font-semibold shadow-xs cursor-pointer"
-          >
-            <Plus className="w-4 h-4" />
-            <span>+ Add Customer</span>
-          </button>
+          {userRole === 'admin' && (
+            <button
+              onClick={() => setShowAddModal(true)}
+              className="flex items-center gap-1.5 px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-xs font-semibold shadow-xs cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              <span>+ Add Customer</span>
+            </button>
+          )}
         </div>
       </div>
 

@@ -161,13 +161,15 @@ export const RevenueView: React.FC<RevenueViewProps> = ({
             </span>
           </div>
 
-          <button
-            onClick={onOpenRevenueModal}
-            className="flex items-center gap-1.5 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg shadow-xs transition-colors cursor-pointer"
-          >
-            <ArrowUpRight className="w-4 h-4" />
-            <span>+ Record Collection</span>
-          </button>
+          {userRole === 'admin' && (
+            <button
+              onClick={onOpenRevenueModal}
+              className="flex items-center gap-1.5 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg shadow-xs transition-colors cursor-pointer"
+            >
+              <ArrowUpRight className="w-4 h-4" />
+              <span>+ Record Collection</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -355,14 +357,16 @@ export const RevenueView: React.FC<RevenueViewProps> = ({
                     </td>
                     <td className="py-3 px-4 text-center whitespace-nowrap">
                       <div className="flex items-center justify-center gap-1.5">
-                        <button
-                          onClick={() => onEditRevenue(tx)}
-                          disabled={tx.isVoid}
-                          className="p-1 text-slate-400 hover:text-slate-700 disabled:opacity-30 cursor-pointer"
-                          title="Edit transaction"
-                        >
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </button>
+                        {userRole === 'admin' && (
+                          <button
+                            onClick={() => onEditRevenue(tx)}
+                            disabled={tx.isVoid}
+                            className="p-1 text-slate-400 hover:text-slate-700 disabled:opacity-30 cursor-pointer"
+                            title="Edit transaction"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                         {userRole === 'admin' && (
                           <button
                             onClick={() => voidRevenueTransaction(tx.id)}
